@@ -1,0 +1,530 @@
+
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Calendar, momentLocalizer, Views, EventProps, ToolbarProps, Formats } from 'react-big-calendar';
+import moment from 'moment';
+import 'moment/locale/it'; 
+import { Post, CalendarEvent, PostStatus, PostType, SocialChannel, AppNotification } from './types';
+import { 
+    subscribeToPosts, 
+    addPost, 
+    updatePost, 
+    deletePost, 
+    savePostsToStorage, 
+    subscribeToChannels, 
+    saveSocialChannels,
+    savePostWithHistory,
+    deleteChannelFromDb
+} from './services/firestoreService';
+import { STATUS_COLORS } from './constants';
+import { exportPostsToJson, exportPostsToCsv } from './utils/fileHandlers';
+import PostModal from './components/PostModal';
+import CalendarHeader from './components/CalendarHeader';
+import CustomToolbar from './components/CustomToolbar';
+import ReportsModal from './components/ReportsModal';
+import SocialChannelsModal from './components/SocialChannelsModal';
+import StatusLegend from './components/StatusLegend';
+import ChangelogModal from './components/ChangelogModal';
+
+// Configurazione rigorosa di moment.js per l'italiano
+moment.locale('it');
+moment.updateLocale('it', {
+    months: 'Gennaio_Febbraio_Marzo_Aprile_Maggio_Giugno_Luglio_Agosto_Settembre_Ottobre_Novembre_Dicembre'.split('_'),
+    monthsShort: 'Gen_Feb_Mar_Apr_Mag_Giu_Lug_Ago_Set_Ott_Nov_Dic'.split('_'),
+    weekdays: 'Domenica_Lunedì_Martedì_Mercoledì_Giovedì_Venerdì_Sabato'.split('_'),
+    weekdaysShort: 'Dom_Lun_Mar_Mer_Gio_Ven_Sab'.split('_'),
+    weekdaysMin: 'Do_Lu_Ma_Me_Gi_Ve_Sa'.split('_'),
+    longDateFormat: {
+        LT: 'HH:mm',
+        LTS: 'HH:mm:ss',
+        L: 'DD/MM/YYYY',
+        LL: 'D MMMM YYYY',
+        LLL: 'D MMMM YYYY HH:mm',
+        LLLL: 'dddd D MMMM YYYY HH:mm'
+    },
+    week: {
+        dow: 1, 
+        doy: 4
+    }
+});
+
+const localizer = momentLocalizer(moment);
+
+const mapPostsToEvents = (posts: Post[]): CalendarEvent[] => {
+    return posts.map(post => {
+        const start = new Date(post.date);
+        const end = new Date(start.getTime() + 60 * 60 * 1000); 
+        return {
+            ...post,
+            start,
+            end,
+        };
+    });
+};
+
+const calendarMessages = {
+  allDay: 'Tutto il giorno',
+  previous: 'Precedente',
+  next: 'Successivo',
+  today: 'Oggi',
+  month: 'Mese',
+  week: 'Settimana',
+  day: 'Giorno',
+  agenda: 'Agenda',
+  date: 'Data',
+  time: 'Ora',
+  event: 'Evento',
+  noEventsInRange: 'Nessun post in questo periodo.',
+  showMore: (total: number) => `+${total} altri`
+};
+
+const calendarFormats: Formats = {
+    monthHeaderFormat: (date, culture, local) => local.format(date, 'MMMM YYYY', culture),
+    weekdayFormat: (date, culture, local) => local.format(date, 'dddd', culture),
+    dayHeaderFormat: (date, culture, local) => local.format(date, 'dddd DD/MM/YYYY', culture),
+    dayRangeHeaderFormat: ({ start, end }, culture, local) =>
+        local.format(start, 'DD MMM', culture) + ' - ' + local.format(end, 'DD MMM YYYY', culture),
+};
+
+const App: React.FC = () => {
+    const [posts, setPosts] = useState<Post[]>([]);
+    const [events, setEvents] = useState<CalendarEvent[]>([]);
+    const [socialChannels, setSocialChannels] = useState<SocialChannel[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeChannelFilters, setActiveChannelFilters] = useState<string[]>([]);
+    
+    const [view, setView] = useState(Views.MONTH);
+    const [date, setDate] = useState(new Date());
+
+    const [selectedEvent, setSelectedEvent] = useState<Partial<Post> | null>(null);
+    
+    const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+    const [isReportsModalOpen, setIsReportsModalOpen] = useState(false);
+    const [isChannelsModalOpen, setIsChannelsModalOpen] = useState(false);
+    const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
+
+    const [importPreview, setImportPreview] = useState<{
+        total: number;
+        valid: number;
+        invalid: number;
+        data: Post[];
+    } | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const defaultScrollTime = useMemo(() => new Date(1970, 1, 1, 9, 0, 0), []);
+
+    // REAL-TIME LISTENER FOR POSTS
+    useEffect(() => {
+        const unsubscribe = subscribeToPosts((updatedPosts) => {
+            setPosts(updatedPosts);
+        });
+        return () => unsubscribe(); // Cleanup on unmount
+    }, []);
+
+    // REAL-TIME LISTENER FOR CHANNELS
+    useEffect(() => {
+        const unsubscribe = subscribeToChannels((updatedChannels) => {
+            setSocialChannels(updatedChannels);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        setEvents(mapPostsToEvents(posts));
+    }, [posts]);
+
+    // ---- NOTIFICATION LOGIC ----
+    const notifications = useMemo<AppNotification[]>(() => {
+        const alerts: AppNotification[] = [];
+        const now = moment();
+        const tomorrow = moment().add(24, 'hours');
+
+        posts.forEach(post => {
+            if (post.status === PostStatus.Scheduled && post.id) {
+                const postDate = moment(post.date);
+                if (postDate.isAfter(now) && postDate.isBefore(tomorrow)) {
+                    alerts.push({
+                        id: `deadline-${post.id}`,
+                        type: 'deadline',
+                        message: `Post "${post.title}" su ${post.social} in uscita a breve.`,
+                        postId: post.id,
+                        date: post.date
+                    });
+                }
+            }
+
+            if (post.status === PostStatus.NeedsApproval && post.id) {
+                alerts.push({
+                    id: `approval-${post.id}`,
+                    type: 'approval',
+                    message: `Il post "${post.title}" su ${post.social} richiede approvazione.`,
+                    postId: post.id,
+                    date: post.date
+                });
+            }
+        });
+
+        return alerts.sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf());
+    }, [posts]);
+
+    const handleNotificationClick = useCallback((postId: string) => {
+        const post = posts.find(p => p.id === postId);
+        if (post) {
+            setSelectedEvent(post);
+            setIsPostModalOpen(true);
+        }
+    }, [posts]);
+    // ---------------------------
+
+    const filteredEvents = useMemo(() => {
+        let result = events;
+
+        if (searchTerm.trim()) {
+            const lowerTerm = searchTerm.toLowerCase();
+            result = result.filter(event => 
+                event.title.toLowerCase().includes(lowerTerm) || 
+                (event.notes && event.notes.toLowerCase().includes(lowerTerm))
+            );
+        }
+
+        if (activeChannelFilters.length > 0) {
+            result = result.filter(event => activeChannelFilters.includes(event.social));
+        }
+
+        return result;
+    }, [events, searchTerm, activeChannelFilters]);
+    
+    const toggleChannelFilter = useCallback((channelName: string) => {
+        setActiveChannelFilters(prev => {
+            if (prev.includes(channelName)) {
+                return prev.filter(c => c !== channelName);
+            } else {
+                return [...prev, channelName];
+            }
+        });
+    }, []);
+
+    const handleSelectSlot = useCallback(({ start }: { start: Date }) => {
+        if (socialChannels.length === 0) {
+            alert("Attendi il caricamento dei canali o aggiungine uno.");
+            return;
+        }
+        setSelectedEvent({
+            date: moment(start).format('YYYY-MM-DDTHH:mm'),
+            social: socialChannels[0].name,
+            status: PostStatus.NotStarted,
+            postType: PostType.Post,
+            title: '',
+        });
+        setIsPostModalOpen(true);
+    }, [socialChannels]);
+
+    const handleSelectEvent = useCallback((event: CalendarEvent) => {
+        const post = posts.find(p => p.id === event.id);
+        if (post) {
+            setSelectedEvent(post);
+        }
+        setIsPostModalOpen(true);
+    }, [posts]);
+
+    const closePostModal = useCallback(() => {
+        setIsPostModalOpen(false);
+        setSelectedEvent(null);
+    }, []);
+
+    const handleSavePost = useCallback(async (postToSave: Post) => {
+        // Nessun setPosts manuale necessario: il listener aggiornerà la UI
+        if (postToSave.id) {
+            // Se stiamo aggiornando, usiamo la funzione che gestisce la cronologia
+            const originalPost = posts.find(p => p.id === postToSave.id);
+            if (originalPost) {
+                await savePostWithHistory(postToSave.id, originalPost, postToSave);
+            } else {
+                await updatePost(postToSave.id, postToSave);
+            }
+        } else {
+            await addPost(postToSave);
+        }
+        closePostModal();
+    }, [closePostModal, posts]);
+    
+    const handleDeletePost = useCallback(async (id: string) => {
+        if (!id) return;
+        await deletePost(id);
+        closePostModal();
+    }, [closePostModal]);
+
+    const handleSaveChannels = useCallback(async (updatedChannels: SocialChannel[]) => {
+        // Gestione eliminazione canali
+        const channelsToDelete = socialChannels.filter(c => !updatedChannels.find(uc => uc.id === c.id));
+        
+        for (const c of channelsToDelete) {
+             await deleteChannelFromDb(c.id);
+        }
+        
+        await saveSocialChannels(updatedChannels);
+    }, [socialChannels]);
+
+    const handleImportFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const inputElement = event.target;
+        const file = inputElement.files?.[0];
+
+        if (!file) return;
+
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            const content = e.target?.result;
+            if (typeof content !== 'string') return;
+
+            try {
+                let importedData;
+                try {
+                    importedData = JSON.parse(content);
+                } catch (jsonError) {
+                    alert("Il file selezionato non contiene un JSON valido.");
+                    return;
+                }
+                
+                if (!Array.isArray(importedData)) {
+                    alert("La struttura del file non è corretta (non è una lista).");
+                    return;
+                }
+
+                let validCount = 0;
+                let invalidCount = 0;
+                const sanitizedPosts: Post[] = [];
+
+                importedData.forEach((item: any) => {
+                    if (item && typeof item === 'object') {
+                        const dateIsValid = item.date && moment(item.date).isValid();
+                        
+                        const newPost: Post = {
+                            id: item.id || '', // Maintain ID if possible, logic in service handles this
+                            title: item.title || '(Importato senza titolo)',
+                            date: dateIsValid ? moment(item.date).format('YYYY-MM-DDTHH:mm') : moment().format('YYYY-MM-DDTHH:mm'),
+                            social: item.social || (socialChannels.length > 0 ? socialChannels[0].name : 'Generico'),
+                            status: Object.values(PostStatus).includes(item.status) ? item.status : PostStatus.Draft,
+                            postType: Object.values(PostType).includes(item.postType) ? item.postType : PostType.Post,
+                            externalLink: item.externalLink || '',
+                            creativityLink: item.creativityLink || '',
+                            notes: item.notes || '',
+                            history: item.history || [] 
+                        };
+                        sanitizedPosts.push(newPost);
+                        validCount++;
+                    } else {
+                        invalidCount++;
+                    }
+                });
+
+                if (validCount === 0) {
+                    alert("Il file non contiene nessun post valido da importare.");
+                    return;
+                }
+
+                setImportPreview({
+                    total: importedData.length,
+                    valid: validCount,
+                    invalid: invalidCount,
+                    data: sanitizedPosts
+                });
+
+            } catch (error) {
+                console.error("Errore generico importazione:", error);
+                alert("Si è verificato un errore imprevisto durante la lettura del file.");
+            } finally {
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+            }
+        };
+
+        reader.readAsText(file);
+    }, [socialChannels]);
+
+    const confirmImport = async () => {
+        if (importPreview && importPreview.data) {
+            await savePostsToStorage(importPreview.data);
+            setImportPreview(null);
+        }
+    };
+
+    const cancelImport = () => {
+        setImportPreview(null);
+    };
+
+    const eventPropGetter = useCallback((event: CalendarEvent) => {
+        const channel = socialChannels.find(c => c.name === event.social);
+        const backgroundColor = channel ? channel.color : '#6B7280'; 
+        const style = {
+            backgroundColor,
+            borderColor: backgroundColor,
+            borderRadius: '6px',
+            color: '#ffffff',
+            borderWidth: '1px',
+            padding: '2px 4px',
+            borderLeftWidth: '4px',
+            fontSize: '0.85rem', 
+        };
+        return { style };
+    }, [socialChannels]);
+
+    const CustomEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => {
+        const statusColor = STATUS_COLORS[event.status];
+        const textColor = event.status === PostStatus.Draft ? 'text-gray-800' : 'text-white';
+
+        return (
+            <div className="flex flex-col h-full justify-start overflow-hidden leading-tight">
+                <div className="font-bold truncate text-sm">{event.title || '(Senza titolo)'}</div>
+                <div className="flex justify-between items-center mt-1">
+                     <span className="text-[10px] opacity-90 truncate pr-1">{event.social}</span>
+                     <div className={`px-1.5 py-0.5 text-[9px] font-bold rounded-full ${statusColor} ${textColor}`}>
+                        <span className="capitalize block truncate max-w-[60px]">{event.status}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+    
+    const handleDrillDown = useCallback((date: Date) => {
+        setDate(date);
+        setView(Views.DAY);
+    }, []);
+
+    return (
+        <div className="p-4 md:p-8 font-sans text-gray-800 dark:text-gray-200">
+            <div className="max-w-7xl mx-auto">
+                <CalendarHeader 
+                    onAddPost={() => handleSelectSlot({ start: new Date() })}
+                    onShowReports={() => setIsReportsModalOpen(true)}
+                    onShowChannels={() => setIsChannelsModalOpen(true)}
+                    onExportJson={() => exportPostsToJson(posts)}
+                    onExportCsv={() => exportPostsToCsv(posts)}
+                    onImport={handleImportFileSelect}
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    fileInputRef={fileInputRef}
+                    channels={socialChannels}
+                    activeFilters={activeChannelFilters}
+                    onToggleChannel={toggleChannelFilter}
+                    notifications={notifications}
+                    onNotificationClick={handleNotificationClick}
+                    onShowChangelog={() => setIsChangelogModalOpen(true)}
+                />
+                
+                <StatusLegend />
+                
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg" style={{ height: 'calc(100vh - 220px)' }}>
+                    <Calendar
+                        localizer={localizer}
+                        culture='it'
+                        events={filteredEvents}
+                        startAccessor="start"
+                        endAccessor="end"
+                        view={view}
+                        onView={setView}
+                        date={date}
+                        onNavigate={setDate}
+                        views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
+                        selectable
+                        scrollToTime={defaultScrollTime}
+                        onSelectSlot={handleSelectSlot}
+                        onSelectEvent={handleSelectEvent}
+                        eventPropGetter={eventPropGetter}
+                        messages={calendarMessages}
+                        formats={calendarFormats}
+                        popup={true}
+                        onDrillDown={handleDrillDown}
+                        components={{
+                            event: CustomEvent,
+                            toolbar: (props: ToolbarProps) => <CustomToolbar {...props} />,
+                        }}
+                    />
+                </div>
+            </div>
+
+            {isPostModalOpen && selectedEvent && (
+                <PostModal
+                    isOpen={isPostModalOpen}
+                    post={selectedEvent}
+                    socialChannels={socialChannels}
+                    onClose={closePostModal}
+                    onSave={handleSavePost}
+                    onDelete={handleDeletePost}
+                />
+            )}
+            
+            {isReportsModalOpen && (
+                <ReportsModal
+                    isOpen={isReportsModalOpen}
+                    onClose={() => setIsReportsModalOpen(false)}
+                    posts={posts}
+                    channels={socialChannels}
+                />
+            )}
+            
+            {isChannelsModalOpen && (
+                <SocialChannelsModal
+                    isOpen={isChannelsModalOpen}
+                    onClose={() => setIsChannelsModalOpen(false)}
+                    channels={socialChannels}
+                    posts={posts}
+                    onSave={handleSaveChannels}
+                />
+            )}
+
+            {isChangelogModalOpen && (
+                <ChangelogModal 
+                    isOpen={isChangelogModalOpen}
+                    onClose={() => setIsChangelogModalOpen(false)}
+                />
+            )}
+
+            {importPreview && (
+                <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-md">
+                        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mb-4 mx-auto">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        </div>
+                        <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-2">Conferma Importazione</h3>
+                        <p className="text-center text-gray-500 dark:text-gray-400 mb-6 text-sm">
+                            Hai selezionato un file di backup. Ecco cosa contiene:
+                        </p>
+                        
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6 space-y-2">
+                            <div className="flex justify-between">
+                                <span className="text-gray-600 dark:text-gray-300">Totale Record:</span>
+                                <span className="font-bold">{importPreview.total}</span>
+                            </div>
+                            <div className="flex justify-between text-green-600 dark:text-green-400">
+                                <span>Pronti all'importazione:</span>
+                                <span className="font-bold">{importPreview.valid}</span>
+                            </div>
+                        </div>
+
+                        <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-800 dark:text-red-200 mb-6">
+                            ⚠️ <strong>ATTENZIONE:</strong> Procedendo, cancellerai tutti i dati presenti nella memoria del browser e li sostituirai con questo file. Questa azione è irreversibile.
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={cancelImport}
+                                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg text-gray-800 dark:text-white transition-colors"
+                            >
+                                Annulla
+                            </button>
+                            <button 
+                                onClick={confirmImport}
+                                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold transition-colors shadow-lg"
+                            >
+                                Sovrascrivi Dati
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default App;

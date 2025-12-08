@@ -1,0 +1,56 @@
+
+
+export interface SocialChannel {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export enum PostStatus {
+  NotStarted = 'non iniziato',
+  Draft = 'in bozze',
+  NeedsApproval = 'da approvare',
+  Waiting = 'in attesa',
+  Scheduled = 'programmato',
+  Published = 'pubblicato',
+}
+
+export enum PostType {
+  Post = 'post',
+  Carousel = 'carosello',
+  Video = 'video',
+  Reel = 'reel',
+  Story = 'storia',
+  Update = 'aggiornamento',
+}
+
+export interface PostVersion {
+  timestamp: string;
+  data: Omit<Post, 'history'>;
+}
+
+export interface Post {
+  id?: string;
+  title: string;
+  date: string; // ISO format string e.g., 'YYYY-MM-DDTHH:mm'
+  social: string; // Now a string, refers to SocialChannel.name
+  status: PostStatus;
+  postType: PostType;
+  externalLink?: string;
+  creativityLink?: string;
+  notes?: string;
+  history?: PostVersion[]; // Array of previous versions
+}
+
+export interface CalendarEvent extends Post {
+  start: Date;
+  end: Date;
+}
+
+export interface AppNotification {
+    id: string;
+    type: 'deadline' | 'approval';
+    message: string;
+    postId: string;
+    date: string;
+}
