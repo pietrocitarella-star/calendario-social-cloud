@@ -1,6 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 // --- ISTRUZIONI IMPORTANTI ---
 // 1. Vai su https://console.firebase.google.com/
@@ -23,3 +24,6 @@ const app = initializeApp(firebaseConfig);
 
 // Esportiamo il database per usarlo nel resto dell'app
 export const db = getFirestore(app);
+
+// Esportiamo il servizio di autenticazione
+export const auth = getAuth(app);

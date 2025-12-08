@@ -24,6 +24,9 @@ import ReportsModal from './components/ReportsModal';
 import SocialChannelsModal from './components/SocialChannelsModal';
 import StatusLegend from './components/StatusLegend';
 import ChangelogModal from './components/ChangelogModal';
+import LoginScreen from './components/LoginScreen';
+import { auth } from './firebaseConfig';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 
 // Configurazione rigorosa di moment.js per l'italiano
 moment.locale('it');
@@ -86,6 +89,9 @@ const calendarFormats: Formats = {
 };
 
 const App: React.FC = () => {
+    const [user, setUser] = useState<User | null>(null);
+    const [authLoading, setAuthLoading] = useState(true);
+
     const [posts, setPosts] = useState<Post[]>([]);
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [socialChannels, setSocialChannels] = useState<SocialChannel[]>([]);
@@ -112,21 +118,38 @@ const App: React.FC = () => {
 
     const defaultScrollTime = useMemo(() => new Date(1970, 1, 1, 9, 0, 0), []);
 
-    // REAL-TIME LISTENER FOR POSTS
+    // AUTH LISTENER
     useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+            setAuthLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // REAL-TIME LISTENER FOR POSTS (Solo se loggato)
+    useEffect(() => {
+        if (!user) {
+            setPosts([]);
+            return;
+        }
         const unsubscribe = subscribeToPosts((updatedPosts) => {
             setPosts(updatedPosts);
         });
-        return () => unsubscribe(); // Cleanup on unmount
-    }, []);
+        return () => unsubscribe(); 
+    }, [user]);
 
-    // REAL-TIME LISTENER FOR CHANNELS
+    // REAL-TIME LISTENER FOR CHANNELS (Solo se loggato)
     useEffect(() => {
+        if (!user) {
+            setSocialChannels([]);
+            return;
+        }
         const unsubscribe = subscribeToChannels((updatedChannels) => {
             setSocialChannels(updatedChannels);
         });
         return () => unsubscribe();
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         setEvents(mapPostsToEvents(posts));
@@ -232,9 +255,7 @@ const App: React.FC = () => {
     }, []);
 
     const handleSavePost = useCallback(async (postToSave: Post) => {
-        // Nessun setPosts manuale necessario: il listener aggiornerà la UI
         if (postToSave.id) {
-            // Se stiamo aggiornando, usiamo la funzione che gestisce la cronologia
             const originalPost = posts.find(p => p.id === postToSave.id);
             if (originalPost) {
                 await savePostWithHistory(postToSave.id, originalPost, postToSave);
@@ -254,13 +275,10 @@ const App: React.FC = () => {
     }, [closePostModal]);
 
     const handleSaveChannels = useCallback(async (updatedChannels: SocialChannel[]) => {
-        // Gestione eliminazione canali
         const channelsToDelete = socialChannels.filter(c => !updatedChannels.find(uc => uc.id === c.id));
-        
         for (const c of channelsToDelete) {
              await deleteChannelFromDb(c.id);
         }
-        
         await saveSocialChannels(updatedChannels);
     }, [socialChannels]);
 
@@ -299,7 +317,7 @@ const App: React.FC = () => {
                         const dateIsValid = item.date && moment(item.date).isValid();
                         
                         const newPost: Post = {
-                            id: item.id || '', // Maintain ID if possible, logic in service handles this
+                            id: item.id || '', 
                             title: item.title || '(Importato senza titolo)',
                             date: dateIsValid ? moment(item.date).format('YYYY-MM-DDTHH:mm') : moment().format('YYYY-MM-DDTHH:mm'),
                             social: item.social || (socialChannels.length > 0 ? socialChannels[0].name : 'Generico'),
@@ -353,6 +371,14 @@ const App: React.FC = () => {
         setImportPreview(null);
     };
 
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+        } catch (error) {
+            console.error("Logout error", error);
+        }
+    };
+
     const eventPropGetter = useCallback((event: CalendarEvent) => {
         const channel = socialChannels.find(c => c.name === event.social);
         const backgroundColor = channel ? channel.color : '#6B7280'; 
@@ -391,9 +417,34 @@ const App: React.FC = () => {
         setView(Views.DAY);
     }, []);
 
+    // RENDER LOGIN IF NOT AUTHENTICATED
+    if (authLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
+                Caricamento...
+            </div>
+        );
+    }
+
+    if (!user) {
+        return <LoginScreen />;
+    }
+
     return (
         <div className="p-4 md:p-8 font-sans text-gray-800 dark:text-gray-200">
             <div className="max-w-7xl mx-auto">
+                <div className="flex justify-between items-center mb-2">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Loggato come: <span className="font-semibold text-blue-600 dark:text-blue-400">{user.email}</span>
+                    </div>
+                    <button 
+                        onClick={handleLogout}
+                        className="text-xs px-3 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                    >
+                        Esci
+                    </button>
+                </div>
+
                 <CalendarHeader 
                     onAddPost={() => handleSelectSlot({ start: new Date() })}
                     onShowReports={() => setIsReportsModalOpen(true)}
@@ -503,7 +554,7 @@ const App: React.FC = () => {
                         </div>
 
                         <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-800 dark:text-red-200 mb-6">
-                            ⚠️ <strong>ATTENZIONE:</strong> Procedendo, cancellerai tutti i dati presenti nella memoria del browser e li sostituirai con questo file. Questa azione è irreversibile.
+                            ⚠️ <strong>ATTENZIONE:</strong> Procedendo, cancellerai tutti i dati presenti nel cloud e li sostituirai con questo file.
                         </div>
 
                         <div className="flex gap-3">
