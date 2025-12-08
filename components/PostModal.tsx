@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Post, PostStatus, PostType, SocialChannel, PostVersion } from '../types';
+import { Post, PostStatus, PostType, SocialChannel, PostVersion, TeamMember } from '../types';
 import { POST_STATUSES, POST_TYPES } from '../constants';
 import moment from 'moment';
 
@@ -8,12 +8,13 @@ interface PostModalProps {
   isOpen: boolean;
   post: Partial<Post>;
   socialChannels: SocialChannel[];
+  teamMembers?: TeamMember[];
   onClose: () => void;
   onSave: (post: Post) => void;
   onDelete: (id: string) => void;
 }
 
-const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, onClose, onSave, onDelete }) => {
+const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, teamMembers = [], onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState<Partial<Post>>(post);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -239,6 +240,7 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, onC
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Titolo del post</label>
             <input type="text" name="title" placeholder="Titolo del post" value={formData.title || ''} onChange={handleChange} className="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500" />
           </div>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Canale Social</label>
@@ -253,12 +255,23 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, onC
                 </select>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo di contenuto</label>
-            <select name="postType" value={formData.postType} onChange={handleChange} className="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 capitalize">
-                {POST_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-            </select>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo di contenuto</label>
+                <select name="postType" value={formData.postType} onChange={handleChange} className="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500 capitalize">
+                    {POST_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Assegnato a</label>
+                <select name="assignedTo" value={formData.assignedTo || ''} onChange={handleChange} className="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">-- Nessuno --</option>
+                    {teamMembers.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}
+                </select>
+            </div>
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Link Esterno (opzionale)</label>
             <div className="flex gap-2 relative">

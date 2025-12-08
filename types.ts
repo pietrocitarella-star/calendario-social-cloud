@@ -6,6 +6,12 @@ export interface SocialChannel {
   color: string;
 }
 
+export interface TeamMember {
+  id: string;
+  name: string;
+  color: string; // Colore identificativo dell'utente
+}
+
 export enum PostStatus {
   NotStarted = 'non iniziato',
   Draft = 'in bozze',
@@ -36,6 +42,7 @@ export interface Post {
   social: string; // Now a string, refers to SocialChannel.name
   status: PostStatus;
   postType: PostType;
+  assignedTo?: string; // ID del TeamMember
   externalLink?: string;
   creativityLink?: string;
   notes?: string;

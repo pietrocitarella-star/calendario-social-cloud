@@ -1,5 +1,5 @@
 
-import { Post, SocialChannel, PostVersion } from '../types';
+import { Post, SocialChannel, PostVersion, TeamMember } from '../types';
 import { db } from '../firebaseConfig';
 import { 
     collection, 
@@ -16,6 +16,7 @@ import {
 
 const POSTS_COLLECTION = 'posts';
 const CHANNELS_COLLECTION = 'channels';
+const TEAM_COLLECTION = 'team_members';
 
 // --- HELPERS ---
 
@@ -217,6 +218,44 @@ export const deleteChannelFromDb = async (id: string) => {
         await deleteDoc(doc(db, CHANNELS_COLLECTION, id));
     } catch (e) {
         handleError('eliminazione canale', e);
+        throw e;
+    }
+};
+
+// --- TEAM MANAGEMENT ---
+
+export const subscribeToTeam = (callback: (members: TeamMember[]) => void) => {
+    const q = query(collection(db, TEAM_COLLECTION));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        let members: TeamMember[] = [];
+        snapshot.forEach((doc) => {
+            members.push({ id: doc.id, ...doc.data() } as TeamMember);
+        });
+        callback(members);
+    }, (error) => {
+        console.error("Errore sottoscrizione team:", error);
+    });
+
+    return unsubscribe;
+};
+
+export const saveTeamMembers = async (members: TeamMember[]) => {
+    const batch = writeBatch(db);
+    members.forEach(m => {
+        // Se è un nuovo membro senza ID valido generato da noi nel modal, Firestore ne creerà uno
+        // Ma qui assumiamo che il modal generi un ID temporaneo se nuovo
+        const docRef = doc(db, TEAM_COLLECTION, m.id);
+        batch.set(docRef, { name: m.name, color: m.color }, { merge: true });
+    });
+    await batch.commit();
+};
+
+export const deleteTeamMemberFromDb = async (id: string) => {
+    try {
+        await deleteDoc(doc(db, TEAM_COLLECTION, id));
+    } catch (e) {
+        handleError('eliminazione membro team', e);
         throw e;
     }
 };

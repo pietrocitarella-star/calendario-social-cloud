@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Calendar, momentLocalizer, Views, EventProps, ToolbarProps, Formats } from 'react-big-calendar';
 import moment from 'moment';
 import 'moment/locale/it'; 
-import { Post, CalendarEvent, PostStatus, PostType, SocialChannel, AppNotification } from './types';
+import { Post, CalendarEvent, PostStatus, PostType, SocialChannel, AppNotification, TeamMember } from './types';
 import { 
     subscribeToPosts, 
     addPost, 
@@ -13,7 +13,10 @@ import {
     subscribeToChannels, 
     saveSocialChannels,
     savePostWithHistory,
-    deleteChannelFromDb
+    deleteChannelFromDb,
+    subscribeToTeam,
+    saveTeamMembers,
+    deleteTeamMemberFromDb
 } from './services/firestoreService';
 import { STATUS_COLORS } from './constants';
 import { exportPostsToJson, exportPostsToCsv } from './utils/fileHandlers';
@@ -22,6 +25,7 @@ import CalendarHeader from './components/CalendarHeader';
 import CustomToolbar from './components/CustomToolbar';
 import ReportsModal from './components/ReportsModal';
 import SocialChannelsModal from './components/SocialChannelsModal';
+import TeamMembersModal from './components/TeamMembersModal';
 import StatusLegend from './components/StatusLegend';
 import ChangelogModal from './components/ChangelogModal';
 import LoginScreen from './components/LoginScreen';
@@ -95,6 +99,8 @@ const App: React.FC = () => {
     const [posts, setPosts] = useState<Post[]>([]);
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [socialChannels, setSocialChannels] = useState<SocialChannel[]>([]);
+    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+    
     const [searchTerm, setSearchTerm] = useState('');
     const [activeChannelFilters, setActiveChannelFilters] = useState<string[]>([]);
     
@@ -106,6 +112,7 @@ const App: React.FC = () => {
     const [isPostModalOpen, setIsPostModalOpen] = useState(false);
     const [isReportsModalOpen, setIsReportsModalOpen] = useState(false);
     const [isChannelsModalOpen, setIsChannelsModalOpen] = useState(false);
+    const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
     const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
 
     const [importPreview, setImportPreview] = useState<{
@@ -147,6 +154,18 @@ const App: React.FC = () => {
         }
         const unsubscribe = subscribeToChannels((updatedChannels) => {
             setSocialChannels(updatedChannels);
+        });
+        return () => unsubscribe();
+    }, [user]);
+
+    // REAL-TIME LISTENER FOR TEAM (Solo se loggato)
+    useEffect(() => {
+        if (!user) {
+            setTeamMembers([]);
+            return;
+        }
+        const unsubscribe = subscribeToTeam((updatedMembers) => {
+            setTeamMembers(updatedMembers);
         });
         return () => unsubscribe();
     }, [user]);
@@ -282,6 +301,14 @@ const App: React.FC = () => {
         await saveSocialChannels(updatedChannels);
     }, [socialChannels]);
 
+    const handleSaveTeam = useCallback(async (updatedTeam: TeamMember[]) => {
+        const membersToDelete = teamMembers.filter(m => !updatedTeam.find(um => um.id === m.id));
+        for (const m of membersToDelete) {
+             await deleteTeamMemberFromDb(m.id);
+        }
+        await saveTeamMembers(updatedTeam);
+    }, [teamMembers]);
+
     const handleImportFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const inputElement = event.target;
         const file = inputElement.files?.[0];
@@ -326,7 +353,8 @@ const App: React.FC = () => {
                             externalLink: item.externalLink || '',
                             creativityLink: item.creativityLink || '',
                             notes: item.notes || '',
-                            history: item.history || [] 
+                            history: item.history || [],
+                            assignedTo: item.assignedTo || undefined
                         };
                         sanitizedPosts.push(newPost);
                         validCount++;
@@ -398,10 +426,24 @@ const App: React.FC = () => {
     const CustomEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => {
         const statusColor = STATUS_COLORS[event.status];
         const textColor = event.status === PostStatus.Draft ? 'text-gray-800' : 'text-white';
+        
+        // Trova il membro del team assegnato
+        const assignee = teamMembers.find(m => m.id === event.assignedTo);
 
         return (
-            <div className="flex flex-col h-full justify-start overflow-hidden leading-tight">
-                <div className="font-bold truncate text-sm">{event.title || '(Senza titolo)'}</div>
+            <div className="flex flex-col h-full justify-start overflow-hidden leading-tight relative">
+                <div className="flex justify-between items-start">
+                    <div className="font-bold truncate text-sm flex-grow pr-1">{event.title || '(Senza titolo)'}</div>
+                    {assignee && (
+                        <div 
+                            className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white border border-white flex-shrink-0" 
+                            style={{ backgroundColor: assignee.color }}
+                            title={`Assegnato a: ${assignee.name}`}
+                        >
+                            {assignee.name.substring(0, 1).toUpperCase()}
+                        </div>
+                    )}
+                </div>
                 <div className="flex justify-between items-center mt-1">
                      <span className="text-[10px] opacity-90 truncate pr-1">{event.social}</span>
                      <div className={`px-1.5 py-0.5 text-[9px] font-bold rounded-full ${statusColor} ${textColor}`}>
@@ -449,6 +491,7 @@ const App: React.FC = () => {
                     onAddPost={() => handleSelectSlot({ start: new Date() })}
                     onShowReports={() => setIsReportsModalOpen(true)}
                     onShowChannels={() => setIsChannelsModalOpen(true)}
+                    onShowTeam={() => setIsTeamModalOpen(true)}
                     onExportJson={() => exportPostsToJson(posts)}
                     onExportCsv={() => exportPostsToCsv(posts)}
                     onImport={handleImportFileSelect}
@@ -499,6 +542,7 @@ const App: React.FC = () => {
                     isOpen={isPostModalOpen}
                     post={selectedEvent}
                     socialChannels={socialChannels}
+                    teamMembers={teamMembers}
                     onClose={closePostModal}
                     onSave={handleSavePost}
                     onDelete={handleDeletePost}
@@ -521,6 +565,16 @@ const App: React.FC = () => {
                     channels={socialChannels}
                     posts={posts}
                     onSave={handleSaveChannels}
+                />
+            )}
+
+            {isTeamModalOpen && (
+                <TeamMembersModal
+                    isOpen={isTeamModalOpen}
+                    onClose={() => setIsTeamModalOpen(false)}
+                    teamMembers={teamMembers}
+                    posts={posts}
+                    onSave={handleSaveTeam}
                 />
             )}
 

@@ -7,6 +7,7 @@ interface CalendarHeaderProps {
   onAddPost: () => void;
   onShowReports: () => void;
   onShowChannels: () => void;
+  onShowTeam: () => void;
   onExportJson: () => void;
   onExportCsv: () => void;
   onImport: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -24,7 +25,8 @@ interface CalendarHeaderProps {
 const CalendarHeader: React.FC<CalendarHeaderProps> = ({ 
     onAddPost, 
     onShowReports, 
-    onShowChannels, 
+    onShowChannels,
+    onShowTeam,
     onExportJson, 
     onExportCsv, 
     onImport,
@@ -68,7 +70,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 text-xs font-mono rounded-full transition-colors"
                         title="Vedi cronologia versioni"
                     >
-                        v1.5.0
+                        v1.6.0
                     </button>
                 )}
             </div>
@@ -99,6 +101,10 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                     <button onClick={onShowChannels} className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors shadow-sm whitespace-nowrap">
                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                         Canali
+                    </button>
+                    <button onClick={onShowTeam} className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors shadow-sm whitespace-nowrap">
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                        Team
                     </button>
                 </div>
                 
