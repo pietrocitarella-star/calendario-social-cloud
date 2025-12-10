@@ -77,6 +77,8 @@
     }
     
     /* --- TRASFORMAZIONE SHOW MORE IN PULSANTE "VEDI TUTTI" --- */
+    /* MODIFICA: Aggiunto 'body' per aumentare la specificità CSS e vincere contro gli stili di default in produzione */
+    body .rbc-row-segment .rbc-show-more,
     .rbc-row-segment .rbc-show-more {
         background-color: #eff6ff !important; /* blue-50 */
         color: #1d4ed8 !important; /* blue-700 */
@@ -92,6 +94,8 @@
         text-decoration: none !important;
         border: 1px solid #bfdbfe !important;
         transition: all 0.2s;
+        pointer-events: auto !important; /* Forza la cliccabilità */
+        cursor: pointer !important;
     }
     .rbc-row-segment .rbc-show-more:hover {
         background-color: #2563eb !important; /* blue-600 */
