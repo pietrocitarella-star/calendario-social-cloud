@@ -28,6 +28,7 @@ export enum PostType {
   Reel = 'reel',
   Story = 'storia',
   Update = 'aggiornamento',
+  Collaboration = 'collaborazione',
 }
 
 export interface PostVersion {

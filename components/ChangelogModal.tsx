@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 
 interface ChangeLogEntry {
@@ -8,6 +9,78 @@ interface ChangeLogEntry {
 }
 
 const changelogData: ChangeLogEntry[] = [
+    {
+        version: '1.8.0',
+        date: '08/11/2025',
+        changes: [
+            'Performance Boost: Ora il calendario carica solo i post necessari per il periodo visualizzato (+2 mesi buffer), rendendo l\'app velocissima anche con migliaia di post.',
+            'Report On-Demand: I dati dei report ora vengono scaricati integralmente solo quando richiesto, alleggerendo l\'avvio dell\'app.',
+            'Export Ottimizzato: L\'esportazione JSON/CSV scarica tutti i dati in background senza rallentare l\'interfaccia.'
+        ]
+    },
+    {
+        version: '1.7.6',
+        date: '08/11/2025',
+        changes: [
+            'Fix Stabilità: Risolto bug che faceva sparire il link "+ Altri" cambiando vista.',
+            'Vista Settimanale: Layout ottimizzato per colonne strette, con altezza bilanciata e testo che va a capo.'
+        ]
+    },
+    {
+        version: '1.7.5',
+        date: '08/11/2025',
+        changes: [
+            'Fix Sovrapposizione: Nella vista Giorno/Settimana i post ora si affiancano automaticamente senza sovrapporsi ("no-overlap").',
+            'Layout Spazioso: Aumentata notevolmente l\'altezza delle righe orarie per una migliore leggibilità.',
+            'Fix Mese: Il link "+ Altri" ora è sempre visibile e in primo piano.',
+            'Design Adattivo: Le card degli eventi cambiano stile in base alla vista (Compatte nel Mese, Dettagliate nel Giorno).'
+        ]
+    },
+    {
+        version: '1.7.4',
+        date: '08/11/2025',
+        changes: [
+            'Fix Critico: Risolto problema del pulsante "+ altri" che non appariva nella vista mensile.',
+            'Design: Card degli eventi ridisegnate per essere più leggibili e compatte.',
+            'Visualizzazione: Badge social più evidenti e separazione gerarchica delle informazioni.'
+        ]
+    },
+    {
+        version: '1.7.3',
+        date: '08/11/2025',
+        changes: [
+            'Visual Improvement: Le etichette dei canali social nelle card sono ora colorate (Badge) per un riconoscimento immediato.',
+            'Fix: Risolto problema di visibilità del pulsante "+ altri" nella vista mensile.'
+        ]
+    },
+    {
+        version: '1.7.2',
+        date: '08/11/2025',
+        changes: [
+            'Design Refresh: Nuovo stile "Minimal" per le card del calendario.',
+            'Migliorata leggibilità: rimosso il colore di sfondo pieno dagli eventi.',
+            'UX: Ordinamento alfabetico automatico dei Tipi di Contenuto.',
+            'Vista Giorno/Settimana: aumentata l\'altezza delle righe orarie per una lettura più chiara.'
+        ]
+    },
+    {
+        version: '1.7.1',
+        date: '07/11/2025',
+        changes: [
+            'Aggiunto tipo di contenuto "Collaborazione".',
+            'Automazione Intelligente: selezionando YouTube, il tipo contenuto diventa automaticamente "Video".'
+        ]
+    },
+    {
+        version: '1.7.0',
+        date: '07/11/2025',
+        changes: [
+            'Nuova funzionalità "Team": gestisci collaboratori e colleghi.',
+            'Assegnazione Post: assegna task specifici ai membri del team.',
+            'Visualizzazione Avatar: le iniziali del collaboratore appaiono sul post nel calendario.',
+            'Miglioramento Privacy: aggiunto tag "noindex" per nascondere l\'app ai motori di ricerca.'
+        ]
+    },
     {
         version: '1.5.0',
         date: '06/11/2025',

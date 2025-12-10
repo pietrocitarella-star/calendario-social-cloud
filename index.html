@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -31,6 +32,171 @@
 }
 </script>
 <link rel="stylesheet" href="/index.css">
+<style>
+    /* --- STILI GENERALI --- */
+    body {
+        overflow-y: hidden; /* Evita doppio scroll */
+    }
+
+    /* --- VISTA MESE (Compatta) --- */
+    
+    .rbc-month-view .rbc-event {
+        padding: 0px !important;
+        margin: 1px 2px !important;
+        background: transparent !important;
+        border: none !important;
+        outline: none !important;
+        /* IMPORTANTE: Altezza fissa per evitare il bug del ricalcolo "Show More" */
+        height: 24px !important; 
+        max-height: 24px !important;
+    }
+
+    /* Stile della card nel mese */
+    .rbc-month-view .custom-calendar-event {
+        height: 100% !important;
+        font-size: 0.75rem !important;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+        border-radius: 3px !important;
+        border-left-width: 3px !important;
+        padding: 0 4px !important;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background-color: white !important;
+        overflow: hidden;
+        white-space: nowrap; /* Evita a capo nel mese */
+    }
+    
+    .dark .rbc-month-view .custom-calendar-event {
+        background-color: #374151 !important;
+    }
+
+    /* Nascondi elementi non essenziali nel mese */
+    .rbc-month-view .event-avatar, 
+    .rbc-month-view .event-status-dot {
+        display: none !important;
+    }
+    
+    /* --- FIX LINK "+ ALTRI" --- */
+    /* Lo forziamo con !important su varie proprietà per vincere contro lo stile inline di React Big Calendar */
+    .rbc-row-segment .rbc-show-more {
+        background-color: #ffffff !important;
+        color: #1e40af !important; /* blue-800 */
+        font-weight: 700 !important;
+        font-size: 0.7rem !important;
+        padding: 1px 6px !important;
+        border-radius: 10px;
+        margin-top: 2px !important;
+        display: inline-block !important;
+        z-index: 50 !important;
+        text-decoration: none !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+        border: 1px solid #dbeafe !important;
+        height: auto !important;
+        line-height: 1.2 !important;
+    }
+    .rbc-row-segment .rbc-show-more:hover {
+        background-color: #eff6ff !important;
+        border-color: #2563eb !important;
+    }
+    .dark .rbc-row-segment .rbc-show-more {
+        background-color: #1f2937 !important;
+        color: #93c5fd !important;
+        border-color: #374151 !important;
+    }
+
+    /* --- VISTA GIORNO E SETTIMANA (Espansa) --- */
+
+    /* Bilanciamento altezza: 80px è un buon compromesso tra Giorno e Settimana */
+    .rbc-timeslot-group {
+        min-height: 80px !important; 
+        border-bottom: 1px dashed #e5e7eb !important;
+    }
+    .dark .rbc-timeslot-group {
+        border-bottom: 1px dashed #374151 !important;
+    }
+
+    /* Stile card nelle viste temporali */
+    .rbc-time-view .custom-calendar-event {
+        border-radius: 6px !important;
+        border: 1px solid #e5e7eb !important;
+        border-left-width: 4px !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+        background-color: #ffffff !important;
+        padding: 4px 6px !important;
+        height: 100%;
+        display: flex;
+        flex-col: column;
+    }
+    
+    /* Ottimizzazione testo per colonne strette (Settimana) */
+    .rbc-time-view .event-title {
+        white-space: normal !important; /* Permetti a capo */
+        line-height: 1.2 !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 3; /* Max 3 righe di titolo */
+        -webkit-box-orient: vertical;
+    }
+
+    .dark .rbc-time-view .custom-calendar-event {
+        background-color: #1f2937 !important;
+        border-color: #4b5563 !important;
+    }
+
+    .rbc-event {
+        background-color: transparent !important;
+        border: none !important;
+        outline: none !important;
+    }
+    
+    .rbc-day-bg + .rbc-day-bg {
+        border-left: 1px solid #e5e7eb !important;
+    }
+    .dark .rbc-day-bg + .rbc-day-bg {
+        border-left: 1px solid #374151 !important;
+    }
+    
+    .dark .rbc-off-range-bg {
+        background-color: #111827; 
+    }
+    .dark .rbc-today {
+        background-color: rgba(59, 130, 246, 0.05); 
+    }
+    
+    .rbc-header {
+        padding: 8px !important;
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-transform: capitalize;
+    }
+    
+    /* Overlay (Popup quando clicchi "+ Altri") */
+    .rbc-overlay {
+        background-color: white !important;
+        border: 1px solid #e5e7eb !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+        border-radius: 8px !important;
+        padding: 8px !important;
+        z-index: 100 !important;
+    }
+    .dark .rbc-overlay {
+        background-color: #1f2937 !important;
+        border-color: #374151 !important;
+    }
+    .rbc-overlay-header {
+        font-weight: bold;
+        padding-bottom: 4px;
+        margin-bottom: 4px;
+        border-bottom: 1px solid #eee;
+        color: #374151;
+    }
+    .dark .rbc-overlay-header {
+        border-color: #374151;
+        color: #e5e7eb;
+    }
+</style>
 </head>
   <body class="bg-gray-100 dark:bg-gray-900">
     <div id="root"></div>

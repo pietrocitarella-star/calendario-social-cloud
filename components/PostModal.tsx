@@ -49,7 +49,17 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    setFormData(prev => {
+        const updated = { ...prev, [name]: value };
+
+        // AUTOMAZIONE: Se seleziono YouTube, imposto automaticamente il tipo su Video
+        if (name === 'social' && value === 'YouTube') {
+            updated.postType = PostType.Video;
+        }
+
+        return updated;
+    });
 
     // Validazione Real-time per i link
     if (name === 'externalLink') {

@@ -11,6 +11,8 @@ import {
     query, 
     writeBatch,
     setDoc,
+    where,
+    orderBy,
     getDocs
 } from 'firebase/firestore';
 
@@ -20,7 +22,6 @@ const TEAM_COLLECTION = 'team_members';
 
 // --- HELPERS ---
 
-// Funzione di utilità per convertire gli errori in qualcosa di leggibile in console
 const handleError = (action: string, error: any) => {
     console.error(`Errore durante ${action}:`, error);
     alert(`Si è verificato un errore durante l'operazione: ${action}. Controlla la console o la connessione.`);
@@ -28,11 +29,21 @@ const handleError = (action: string, error: any) => {
 
 // --- POSTS MANAGEMENT ---
 
-// Sottoscrizione in tempo reale ai Post
-export const subscribeToPosts = (callback: (posts: Post[]) => void) => {
-    const q = query(collection(db, POSTS_COLLECTION));
+// OTTIMIZZAZIONE: Sottoscrizione filtrata per data
+// Accetta start e end (stringhe ISO YYYY-MM-DD...) per scaricare solo il necessario
+export const subscribeToPosts = (
+    startDate: string, 
+    endDate: string, 
+    callback: (posts: Post[]) => void
+) => {
+    // Nota: Le date sono stringhe ISO, quindi il confronto lessicografico funziona
+    const q = query(
+        collection(db, POSTS_COLLECTION),
+        where('date', '>=', startDate),
+        where('date', '<=', endDate)
+        // Nota: Firestore potrebbe richiedere un indice composto per date + altri filtri se aggiunti in futuro
+    );
     
-    // onSnapshot ascolta i cambiamenti nel DB in tempo reale
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const posts: Post[] = [];
         snapshot.forEach((doc) => {
@@ -46,18 +57,39 @@ export const subscribeToPosts = (callback: (posts: Post[]) => void) => {
     return unsubscribe;
 };
 
+// NUOVA FUNZIONE: Fetch one-shot per Export e Report
+// Scarica tutti i post (o filtrati per un range ampio) senza sottoscrizione real-time
+export const fetchAllPosts = async (startDate?: string): Promise<Post[]> => {
+    try {
+        let q;
+        if (startDate) {
+             q = query(collection(db, POSTS_COLLECTION), where('date', '>=', startDate));
+        } else {
+             q = query(collection(db, POSTS_COLLECTION));
+        }
+
+        const snapshot = await getDocs(q);
+        const posts: Post[] = [];
+        snapshot.forEach((doc) => {
+            posts.push({ id: doc.id, ...doc.data() } as Post);
+        });
+        return posts;
+    } catch (e) {
+        handleError('caricamento completo post', e);
+        return [];
+    }
+};
+
 // Aggiungi un nuovo post
 export const addPost = async (post: Omit<Post, 'id'>): Promise<Post> => {
     try {
-        // Sanificazione: Rimuovi esplicitamente 'id' se presente (anche se undefined) per evitare errori Firestore
-        // e rimuovi eventuali campi undefined che potrebbero rompere addDoc
         const sanitizedPost = Object.fromEntries(
             Object.entries(post).filter(([key, value]) => key !== 'id' && value !== undefined)
         );
 
         const docRef = await addDoc(collection(db, POSTS_COLLECTION), {
             ...sanitizedPost,
-            history: [] // Inizializza la cronologia vuota
+            history: [] 
         });
         return { id: docRef.id, ...post } as Post;
     } catch (e) {
@@ -70,12 +102,9 @@ export const addPost = async (post: Omit<Post, 'id'>): Promise<Post> => {
 export const updatePost = async (id: string, updatedData: Partial<Post>): Promise<void> => {
     try {
         const postRef = doc(db, POSTS_COLLECTION, id);
-        
-        // Sanitize undefined values before update
         const sanitizedData = Object.fromEntries(
             Object.entries(updatedData).filter(([_, value]) => value !== undefined)
         );
-
         await updateDoc(postRef, sanitizedData);
     } catch (e) {
         handleError('aggiornamento post', e);
@@ -87,9 +116,6 @@ export const updatePost = async (id: string, updatedData: Partial<Post>): Promis
 export const savePostWithHistory = async (id: string, currentPost: Post, changes: Partial<Post>): Promise<void> => {
     try {
         const postRef = doc(db, POSTS_COLLECTION, id);
-        
-        // Crea snapshot per la cronologia
-        // Rimuoviamo 'history' dai dati salvati nella cronologia per evitare nidificazione infinita
         const { history, ...postDataWithoutHistory } = currentPost;
         
         const versionSnapshot: PostVersion = {
@@ -99,7 +125,9 @@ export const savePostWithHistory = async (id: string, currentPost: Post, changes
 
         const newHistory = [...(history || []), versionSnapshot];
         
-        // Sanitize changes
+        // Mantieni solo le ultime 10 versioni per risparmiare spazio e banda
+        if (newHistory.length > 10) newHistory.shift();
+
         const sanitizedChanges = Object.fromEntries(
             Object.entries(changes).filter(([_, value]) => value !== undefined)
         );
@@ -124,33 +152,33 @@ export const deletePost = async (id: string): Promise<void> => {
     }
 };
 
-// Importazione massiva (usata per il restore da file JSON)
+// Importazione massiva
 export const savePostsToStorage = async (newPosts: Post[]) => {
     try {
         const batch = writeBatch(db);
         
-        // Nota: Firestore ha un limite di 500 operazioni per batch.
-        // Per semplicità qui assumiamo che l'import sia < 500 post.
-        // Se l'import è grande, bisognerebbe spezzarlo in più batch.
+        // Limitiamo il batch a blocchi sicuri
+        const chunks = [];
+        for (let i = 0; i < newPosts.length; i += 400) {
+            chunks.push(newPosts.slice(i, i + 400));
+        }
+
+        for (const chunk of chunks) {
+            const newBatch = writeBatch(db);
+            chunk.forEach(post => {
+                const postRef = post.id 
+                    ? doc(db, POSTS_COLLECTION, post.id)
+                    : doc(collection(db, POSTS_COLLECTION));
+                    
+                const { id, ...data } = post;
+                const sanitizedData = Object.fromEntries(
+                    Object.entries(data).filter(([_, value]) => value !== undefined)
+                );
+                newBatch.set(postRef, sanitizedData);
+            });
+            await newBatch.commit();
+        }
         
-        newPosts.forEach(post => {
-            // Se il post ha un ID, usiamo quello (per sovrascrivere o mantenere riferimenti)
-            // Altrimenti ne generiamo uno nuovo
-            const postRef = post.id 
-                ? doc(db, POSTS_COLLECTION, post.id)
-                : doc(collection(db, POSTS_COLLECTION));
-                
-            const { id, ...data } = post; // Separiamo l'id dai dati
-            
-            // Sanitize data
-            const sanitizedData = Object.fromEntries(
-                Object.entries(data).filter(([_, value]) => value !== undefined)
-            );
-
-            batch.set(postRef, sanitizedData);
-        });
-
-        await batch.commit();
         alert('Importazione completata con successo nel cloud!');
     } catch (e) {
         handleError('importazione massiva', e);
@@ -172,7 +200,7 @@ const defaultChannels: SocialChannel[] = [
 ];
 
 export const subscribeToChannels = (callback: (channels: SocialChannel[]) => void) => {
-    const q = query(collection(db, CHANNELS_COLLECTION));
+    const q = query(collection(db, CHANNELS_COLLECTION), orderBy('name'));
     
     const unsubscribe = onSnapshot(q, async (snapshot) => {
         let channels: SocialChannel[] = [];
@@ -180,11 +208,9 @@ export const subscribeToChannels = (callback: (channels: SocialChannel[]) => voi
             channels.push({ id: doc.id, ...doc.data() } as SocialChannel);
         });
 
-        // Se non ci sono canali nel DB (primo avvio), crea quelli di default
         if (channels.length === 0) {
             console.log("Nessun canale trovato. Inizializzazione canali di default...");
             await initializeDefaultChannels();
-            // Non serve richiamare callback qui, il prossimo snapshot lo farà
         } else {
             callback(channels);
         }
@@ -225,7 +251,7 @@ export const deleteChannelFromDb = async (id: string) => {
 // --- TEAM MANAGEMENT ---
 
 export const subscribeToTeam = (callback: (members: TeamMember[]) => void) => {
-    const q = query(collection(db, TEAM_COLLECTION));
+    const q = query(collection(db, TEAM_COLLECTION), orderBy('name'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
         let members: TeamMember[] = [];
@@ -243,8 +269,6 @@ export const subscribeToTeam = (callback: (members: TeamMember[]) => void) => {
 export const saveTeamMembers = async (members: TeamMember[]) => {
     const batch = writeBatch(db);
     members.forEach(m => {
-        // Se è un nuovo membro senza ID valido generato da noi nel modal, Firestore ne creerà uno
-        // Ma qui assumiamo che il modal generi un ID temporaneo se nuovo
         const docRef = doc(db, TEAM_COLLECTION, m.id);
         batch.set(docRef, { name: m.name, color: m.color }, { merge: true });
     });

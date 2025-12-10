@@ -6,6 +6,7 @@ import 'moment/locale/it';
 import { Post, CalendarEvent, PostStatus, PostType, SocialChannel, AppNotification, TeamMember } from './types';
 import { 
     subscribeToPosts, 
+    fetchAllPosts,
     addPost, 
     updatePost, 
     deletePost, 
@@ -59,6 +60,7 @@ const localizer = momentLocalizer(moment);
 const mapPostsToEvents = (posts: Post[]): CalendarEvent[] => {
     return posts.map(post => {
         const start = new Date(post.date);
+        // Default 1 ora di durata
         const end = new Date(start.getTime() + 60 * 60 * 1000); 
         return {
             ...post,
@@ -96,7 +98,10 @@ const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
 
-    const [posts, setPosts] = useState<Post[]>([]);
+    const [posts, setPosts] = useState<Post[]>([]); // Post visualizzati nel calendario (filtrati per data)
+    const [reportPosts, setReportPosts] = useState<Post[]>([]); // Post per i report (caricati on demand)
+    const [isLoadingReportData, setIsLoadingReportData] = useState(false);
+
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [socialChannels, setSocialChannels] = useState<SocialChannel[]>([]);
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -134,17 +139,23 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
-    // REAL-TIME LISTENER FOR POSTS (Solo se loggato)
+    // OTTIMIZZAZIONE: Carica solo i post del periodo visibile +/- 2 mesi di buffer
     useEffect(() => {
         if (!user) {
             setPosts([]);
             return;
         }
-        const unsubscribe = subscribeToPosts((updatedPosts) => {
+
+        // Calcola il range di date in base alla vista attuale
+        // Prendiamo un buffer di 2 mesi prima e dopo per rendere lo switch fluido
+        const startDate = moment(date).subtract(2, 'months').startOf('month').format('YYYY-MM-DD');
+        const endDate = moment(date).add(2, 'months').endOf('month').format('YYYY-MM-DD');
+
+        const unsubscribe = subscribeToPosts(startDate, endDate, (updatedPosts) => {
             setPosts(updatedPosts);
         });
         return () => unsubscribe(); 
-    }, [user]);
+    }, [user, date, view]); // Ricarica quando cambia la data o la vista significativamente
 
     // REAL-TIME LISTENER FOR CHANNELS (Solo se loggato)
     useEffect(() => {
@@ -173,6 +184,30 @@ const App: React.FC = () => {
     useEffect(() => {
         setEvents(mapPostsToEvents(posts));
     }, [posts]);
+
+    // ---- HANDLERS PER REPORT E EXPORT (Caricamento completo) ----
+    
+    const handleShowReports = async () => {
+        setIsLoadingReportData(true);
+        // Carica i dati dell'ultimo anno per i report
+        const oneYearAgo = moment().subtract(1, 'year').format('YYYY-MM-DD');
+        const data = await fetchAllPosts(oneYearAgo);
+        setReportPosts(data);
+        setIsLoadingReportData(false);
+        setIsReportsModalOpen(true);
+    };
+
+    const handleExportJson = async () => {
+        const allData = await fetchAllPosts();
+        exportPostsToJson(allData);
+    };
+
+    const handleExportCsv = async () => {
+        const allData = await fetchAllPosts();
+        exportPostsToCsv(allData);
+    };
+
+    // -----------------------------------------------------------
 
     // ---- NOTIFICATION LOGIC ----
     const notifications = useMemo<AppNotification[]>(() => {
@@ -407,48 +442,60 @@ const App: React.FC = () => {
         }
     };
 
+    // Stile della card esterna (bordo sinistro colorato)
     const eventPropGetter = useCallback((event: CalendarEvent) => {
         const channel = socialChannels.find(c => c.name === event.social);
-        const backgroundColor = channel ? channel.color : '#6B7280'; 
+        const channelColor = channel ? channel.color : '#6B7280'; 
+        
+        // Assegnamo il colore al border-left
         const style = {
-            backgroundColor,
-            borderColor: backgroundColor,
-            borderRadius: '6px',
-            color: '#ffffff',
-            borderWidth: '1px',
-            padding: '2px 4px',
-            borderLeftWidth: '4px',
-            fontSize: '0.85rem', 
+            borderLeftColor: channelColor, 
         };
-        return { style };
+        
+        return { style, className: 'custom-calendar-event' };
     }, [socialChannels]);
 
+    // Contenuto interno dell'evento - DESIGN IBRIDO (Compatto nel mese, Ricco nella week/day)
     const CustomEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => {
         const statusColor = STATUS_COLORS[event.status];
-        const textColor = event.status === PostStatus.Draft ? 'text-gray-800' : 'text-white';
         
         // Trova il membro del team assegnato
         const assignee = teamMembers.find(m => m.id === event.assignedTo);
+        const channel = socialChannels.find(c => c.name === event.social);
+        const channelColor = channel ? channel.color : '#9ca3af';
 
         return (
-            <div className="flex flex-col h-full justify-start overflow-hidden leading-tight relative">
-                <div className="flex justify-between items-start">
-                    <div className="font-bold truncate text-sm flex-grow pr-1">{event.title || '(Senza titolo)'}</div>
+            <div className="flex flex-col h-full justify-between overflow-hidden relative w-full">
+                {/* 1. Header: Badge e Titolo */}
+                <div className="flex flex-col gap-0.5 w-full">
+                     <div className="flex items-center justify-between w-full">
+                        <span 
+                            className="text-[9px] font-bold text-white px-1 py-0.5 rounded-sm shadow-sm truncate uppercase tracking-tight"
+                            style={{ backgroundColor: channelColor }}
+                        >
+                            {event.social}
+                        </span>
+                        {/* Status Dot (sempre visibile) */}
+                        <div className={`w-2 h-2 rounded-full ${statusColor} ring-1 ring-white dark:ring-gray-700 flex-shrink-0`}></div>
+                     </div>
+                     {/* Class event-title è gestita in CSS per wrapping intelligente in week view */}
+                     <div className="event-title font-semibold text-xs text-gray-800 dark:text-gray-100 leading-tight" title={event.title}>
+                        {event.title || '(Senza titolo)'}
+                     </div>
+                </div>
+                
+                {/* 2. Dettagli Extra (Visibili solo in vista Day/Week grazie al CSS che nasconde .event-avatar nel mese) */}
+                <div className="event-avatar mt-auto pt-1 flex items-center justify-between border-t border-gray-100 dark:border-gray-700">
+                    <span className="text-[10px] text-gray-500 capitalize truncate max-w-[70%]">{event.postType}</span>
                     {assignee && (
                         <div 
-                            className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white border border-white flex-shrink-0" 
+                            className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm flex-shrink-0 border border-white dark:border-gray-800" 
                             style={{ backgroundColor: assignee.color }}
                             title={`Assegnato a: ${assignee.name}`}
                         >
                             {assignee.name.substring(0, 1).toUpperCase()}
                         </div>
                     )}
-                </div>
-                <div className="flex justify-between items-center mt-1">
-                     <span className="text-[10px] opacity-90 truncate pr-1">{event.social}</span>
-                     <div className={`px-1.5 py-0.5 text-[9px] font-bold rounded-full ${statusColor} ${textColor}`}>
-                        <span className="capitalize block truncate max-w-[60px]">{event.status}</span>
-                    </div>
                 </div>
             </div>
         );
@@ -474,6 +521,13 @@ const App: React.FC = () => {
 
     return (
         <div className="p-4 md:p-8 font-sans text-gray-800 dark:text-gray-200">
+            {isLoadingReportData && (
+                <div className="fixed inset-0 bg-white/50 dark:bg-black/50 z-[100] flex flex-col items-center justify-center backdrop-blur-sm">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                    <p className="mt-4 font-semibold text-blue-600 dark:text-blue-400">Caricamento dati completi...</p>
+                </div>
+            )}
+
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-center mb-2">
                     <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -489,11 +543,11 @@ const App: React.FC = () => {
 
                 <CalendarHeader 
                     onAddPost={() => handleSelectSlot({ start: new Date() })}
-                    onShowReports={() => setIsReportsModalOpen(true)}
+                    onShowReports={handleShowReports}
                     onShowChannels={() => setIsChannelsModalOpen(true)}
                     onShowTeam={() => setIsTeamModalOpen(true)}
-                    onExportJson={() => exportPostsToJson(posts)}
-                    onExportCsv={() => exportPostsToCsv(posts)}
+                    onExportJson={handleExportJson}
+                    onExportCsv={handleExportCsv}
                     onImport={handleImportFileSelect}
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
@@ -529,6 +583,8 @@ const App: React.FC = () => {
                         formats={calendarFormats}
                         popup={true}
                         onDrillDown={handleDrillDown}
+                        // Questo evita la sovrapposizione brutale nelle viste week/day
+                        dayLayoutAlgorithm="no-overlap" 
                         components={{
                             event: CustomEvent,
                             toolbar: (props: ToolbarProps) => <CustomToolbar {...props} />,
@@ -553,7 +609,7 @@ const App: React.FC = () => {
                 <ReportsModal
                     isOpen={isReportsModalOpen}
                     onClose={() => setIsReportsModalOpen(false)}
-                    posts={posts}
+                    posts={reportPosts} // Passiamo i dati completi caricati on demand
                     channels={socialChannels}
                 />
             )}
