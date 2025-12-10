@@ -10,6 +10,34 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '1.9.5',
+        date: '08/11/2025',
+        changes: [
+            'Migliorata Vista Mese: Cliccando su "+ N altri" si apre ora una finestra dedicata con la lista completa dei post del giorno in stile Agenda (invece di cambiare vista).',
+            'KPI Avanzati: Aggiunto indicatore "Post Pubblicati (Netto)" nei report, che esclude automaticamente WhatsApp, Telegram e le Collaborazioni dal conteggio totale.',
+            'Refactoring UX: Migliorata la leggibilità delle liste popup.'
+        ]
+    },
+    {
+        version: '1.9.0',
+        date: '08/11/2025',
+        changes: [
+            'Vista Agenda Dettagliata: La visualizzazione lista ora mostra Avatar assegnatario, Tipo di contenuto, Badge stato e Canale social.',
+            'Report Flessibili: Aggiunto selettore anno manuale (< 2025 >) nella modale report.',
+            'Filtri Report Avanzati: I pulsanti dei mesi e "Intero Anno" ora si aggiornano in base all\'anno selezionato manualmente.',
+            'Pulizia Report: Rimosso il grafico trend temporale per focalizzare l\'attenzione sui KPI aggregati.'
+        ]
+    },
+    {
+        version: '1.8.5',
+        date: '08/11/2025',
+        changes: [
+            'UX Mese/Settimana Rivoluzionata: Il link "+ Altri" è ora una barra/pulsante "Vedi tutti (+N)" ben visibile che occupa tutta la larghezza della cella.',
+            'Report Chirurgici: Aggiunta griglia rapida dei mesi (Gen, Feb...) e selettore date preciso "Dal... Al...".',
+            'Ottimizzazione Spazi: Ridotto ulteriormente l\'ingombro verticale degli eventi nel mese per mostrarne di più prima del raggruppamento.'
+        ]
+    },
+    {
         version: '1.8.0',
         date: '08/11/2025',
         changes: [

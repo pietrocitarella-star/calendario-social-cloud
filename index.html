@@ -46,29 +46,28 @@
         background: transparent !important;
         border: none !important;
         outline: none !important;
-        /* IMPORTANTE: Altezza fissa per evitare il bug del ricalcolo "Show More" */
-        height: 24px !important; 
-        max-height: 24px !important;
+        height: 20px !important; /* Ancora più compatto */
+        line-height: 20px !important;
     }
 
     /* Stile della card nel mese */
     .rbc-month-view .custom-calendar-event {
         height: 100% !important;
-        font-size: 0.75rem !important;
-        box-shadow: 0 1px 1px rgba(0,0,0,0.05);
-        border-radius: 3px !important;
+        font-size: 0.7rem !important;
+        box-shadow: none;
+        border-radius: 2px !important;
         border-left-width: 3px !important;
         padding: 0 4px !important;
         display: flex;
         align-items: center;
         gap: 4px;
-        background-color: white !important;
+        background-color: rgba(255,255,255,0.8) !important;
         overflow: hidden;
-        white-space: nowrap; /* Evita a capo nel mese */
+        white-space: nowrap; 
     }
     
     .dark .rbc-month-view .custom-calendar-event {
-        background-color: #374151 !important;
+        background-color: rgba(55, 65, 81, 0.9) !important;
     }
 
     /* Nascondi elementi non essenziali nel mese */
@@ -77,37 +76,39 @@
         display: none !important;
     }
     
-    /* --- FIX LINK "+ ALTRI" --- */
-    /* Lo forziamo con !important su varie proprietà per vincere contro lo stile inline di React Big Calendar */
+    /* --- TRASFORMAZIONE SHOW MORE IN PULSANTE "VEDI TUTTI" --- */
     .rbc-row-segment .rbc-show-more {
-        background-color: #ffffff !important;
-        color: #1e40af !important; /* blue-800 */
+        background-color: #eff6ff !important; /* blue-50 */
+        color: #1d4ed8 !important; /* blue-700 */
         font-weight: 700 !important;
-        font-size: 0.7rem !important;
-        padding: 1px 6px !important;
-        border-radius: 10px;
-        margin-top: 2px !important;
-        display: inline-block !important;
+        font-size: 0.75rem !important;
+        padding: 4px 0 !important; /* Padding verticale */
+        border-radius: 4px;
+        margin: 2px 2px 0 2px !important;
+        display: block !important; /* Occupa tutta la riga */
+        width: calc(100% - 4px) !important;
+        text-align: center !important;
         z-index: 50 !important;
         text-decoration: none !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
-        border: 1px solid #dbeafe !important;
-        height: auto !important;
-        line-height: 1.2 !important;
+        border: 1px solid #bfdbfe !important;
+        transition: all 0.2s;
     }
     .rbc-row-segment .rbc-show-more:hover {
-        background-color: #eff6ff !important;
-        border-color: #2563eb !important;
+        background-color: #2563eb !important; /* blue-600 */
+        color: white !important;
+        border-color: #1e40af !important;
     }
     .dark .rbc-row-segment .rbc-show-more {
         background-color: #1f2937 !important;
         color: #93c5fd !important;
         border-color: #374151 !important;
     }
+    .dark .rbc-row-segment .rbc-show-more:hover {
+        background-color: #374151 !important;
+    }
 
-    /* --- VISTA GIORNO E SETTIMANA (Espansa) --- */
+    /* --- VISTA GIORNO E SETTIMANA --- */
 
-    /* Bilanciamento altezza: 80px è un buon compromesso tra Giorno e Settimana */
     .rbc-timeslot-group {
         min-height: 80px !important; 
         border-bottom: 1px dashed #e5e7eb !important;
@@ -118,26 +119,28 @@
 
     /* Stile card nelle viste temporali */
     .rbc-time-view .custom-calendar-event {
-        border-radius: 6px !important;
+        border-radius: 4px !important;
         border: 1px solid #e5e7eb !important;
         border-left-width: 4px !important;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
         background-color: #ffffff !important;
-        padding: 4px 6px !important;
+        padding: 4px !important;
         height: 100%;
         display: flex;
-        flex-col: column;
+        flex-direction: column;
     }
     
-    /* Ottimizzazione testo per colonne strette (Settimana) */
+    /* Gestione overflow testo settimana */
     .rbc-time-view .event-title {
-        white-space: normal !important; /* Permetti a capo */
-        line-height: 1.2 !important;
+        white-space: normal !important;
+        line-height: 1.1 !important;
+        font-size: 0.75rem !important;
         overflow: hidden;
         text-overflow: ellipsis;
         display: -webkit-box;
-        -webkit-line-clamp: 3; /* Max 3 righe di titolo */
+        -webkit-line-clamp: 3; /* Mostra max 3 righe */
         -webkit-box-orient: vertical;
+        margin-top: 2px;
     }
 
     .dark .rbc-time-view .custom-calendar-event {
@@ -171,30 +174,80 @@
         font-weight: 700;
         text-transform: capitalize;
     }
+
+    /* --- VISTA AGENDA (Lista) --- */
     
-    /* Overlay (Popup quando clicchi "+ Altri") */
+    .rbc-agenda-view table.rbc-agenda-table {
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .dark .rbc-agenda-view table.rbc-agenda-table {
+        border-color: #374151 !important;
+    }
+
+    .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+        padding: 12px !important;
+        background-color: #f9fafb !important;
+        border-bottom: 2px solid #e5e7eb !important;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        color: #6b7280;
+    }
+    .dark .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+        background-color: #1f2937 !important;
+        border-bottom-color: #374151 !important;
+        color: #9ca3af;
+    }
+
+    .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+        padding: 12px !important;
+        vertical-align: middle !important;
+        border-bottom: 1px solid #f3f4f6 !important;
+    }
+    .dark .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+        border-bottom-color: #374151 !important;
+    }
+
+    .rbc-agenda-date-cell {
+        font-weight: 700;
+        color: #374151;
+    }
+    .dark .rbc-agenda-date-cell {
+        color: #e5e7eb;
+    }
+    
+    .rbc-agenda-time-cell {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+    
+    /* Overlay (Popup quando clicchi "Vedi tutti") - Stile migliorato */
     .rbc-overlay {
         background-color: white !important;
         border: 1px solid #e5e7eb !important;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
-        border-radius: 8px !important;
-        padding: 8px !important;
-        z-index: 100 !important;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+        border-radius: 12px !important;
+        padding: 12px !important;
+        z-index: 1000 !important; /* Sopra tutto */
+        min-width: 250px;
     }
     .dark .rbc-overlay {
         background-color: #1f2937 !important;
         border-color: #374151 !important;
     }
     .rbc-overlay-header {
-        font-weight: bold;
-        padding-bottom: 4px;
-        margin-bottom: 4px;
-        border-bottom: 1px solid #eee;
-        color: #374151;
+        font-weight: 800;
+        padding-bottom: 8px;
+        margin-bottom: 8px;
+        border-bottom: 2px solid #f3f4f6;
+        color: #111827;
+        font-size: 1rem;
+        text-transform: capitalize;
     }
     .dark .rbc-overlay-header {
         border-color: #374151;
-        color: #e5e7eb;
+        color: #f3f4f6;
     }
 </style>
 </head>

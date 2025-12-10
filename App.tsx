@@ -30,6 +30,7 @@ import TeamMembersModal from './components/TeamMembersModal';
 import StatusLegend from './components/StatusLegend';
 import ChangelogModal from './components/ChangelogModal';
 import LoginScreen from './components/LoginScreen';
+import DayDetailsModal from './components/DayDetailsModal'; // Importa la nuova modale
 import { auth } from './firebaseConfig';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 
@@ -81,9 +82,9 @@ const calendarMessages = {
   agenda: 'Agenda',
   date: 'Data',
   time: 'Ora',
-  event: 'Evento',
+  event: 'Dettagli Evento',
   noEventsInRange: 'Nessun post in questo periodo.',
-  showMore: (total: number) => `+${total} altri`
+  showMore: (total: number) => `Vedi tutti (+${total})`
 };
 
 const calendarFormats: Formats = {
@@ -92,6 +93,7 @@ const calendarFormats: Formats = {
     dayHeaderFormat: (date, culture, local) => local.format(date, 'dddd DD/MM/YYYY', culture),
     dayRangeHeaderFormat: ({ start, end }, culture, local) =>
         local.format(start, 'DD MMM', culture) + ' - ' + local.format(end, 'DD MMM YYYY', culture),
+    agendaDateFormat: (date, culture, local) => local.format(date, 'ddd DD MMM', culture),
 };
 
 const App: React.FC = () => {
@@ -114,11 +116,19 @@ const App: React.FC = () => {
 
     const [selectedEvent, setSelectedEvent] = useState<Partial<Post> | null>(null);
     
+    // Modali
     const [isPostModalOpen, setIsPostModalOpen] = useState(false);
     const [isReportsModalOpen, setIsReportsModalOpen] = useState(false);
     const [isChannelsModalOpen, setIsChannelsModalOpen] = useState(false);
     const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
     const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
+    
+    // Nuova modale per dettagli giorno
+    const [dayModalData, setDayModalData] = useState<{ isOpen: boolean, date: Date | null, posts: Post[] }>({
+        isOpen: false,
+        date: null,
+        posts: []
+    });
 
     const [importPreview, setImportPreview] = useState<{
         total: number;
@@ -303,6 +313,23 @@ const App: React.FC = () => {
         setIsPostModalOpen(true);
     }, [posts]);
 
+    // NUOVO HANDLER: Gestisce il click su "+ N altri" nella vista mese
+    const handleShowMore = useCallback((events: CalendarEvent[], date: Date) => {
+        // Filtra tutti i post per quel giorno specifico, indipendentemente dai filtri visuali del calendario
+        const dayStart = moment(date).startOf('day');
+        const dayEnd = moment(date).endOf('day');
+        
+        const postsForDay = posts.filter(p => 
+            moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]')
+        );
+
+        setDayModalData({
+            isOpen: true,
+            date: date,
+            posts: postsForDay
+        });
+    }, [posts]);
+
     const closePostModal = useCallback(() => {
         setIsPostModalOpen(false);
         setSelectedEvent(null);
@@ -455,7 +482,7 @@ const App: React.FC = () => {
         return { style, className: 'custom-calendar-event' };
     }, [socialChannels]);
 
-    // Contenuto interno dell'evento - DESIGN IBRIDO (Compatto nel mese, Ricco nella week/day)
+    // Contenuto interno dell'evento - VISTA MESE / SETTIMANA / GIORNO
     const CustomEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => {
         const statusColor = STATUS_COLORS[event.status];
         
@@ -495,6 +522,56 @@ const App: React.FC = () => {
                         >
                             {assignee.name.substring(0, 1).toUpperCase()}
                         </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // Contenuto interno dell'evento - VISTA AGENDA
+    const CustomAgendaEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => {
+        const statusColor = STATUS_COLORS[event.status];
+        const assignee = teamMembers.find(m => m.id === event.assignedTo);
+        const channel = socialChannels.find(c => c.name === event.social);
+        const channelColor = channel ? channel.color : '#9ca3af';
+
+        return (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full py-1">
+                {/* Left: Info principali */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-grow">
+                    <span 
+                        className="text-[10px] font-bold text-white px-2 py-1 rounded-md shadow-sm uppercase tracking-wide w-fit"
+                        style={{ backgroundColor: channelColor }}
+                    >
+                        {event.social}
+                    </span>
+                    <span className="font-semibold text-gray-900 dark:text-white text-sm">{event.title || '(Senza titolo)'}</span>
+                </div>
+
+                {/* Right: Meta details */}
+                <div className="flex items-center gap-4 flex-shrink-0">
+                    {/* Status with Dot */}
+                    <div className="flex items-center gap-1.5">
+                        <div className={`w-2.5 h-2.5 rounded-full ${statusColor}`}></div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 capitalize hidden sm:inline">{event.status}</span>
+                    </div>
+
+                    {/* Post Type Badge */}
+                    <div className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300 text-xs border border-gray-200 dark:border-gray-600 capitalize">
+                        {event.postType}
+                    </div>
+
+                    {/* Assignee Avatar */}
+                    {assignee ? (
+                         <div 
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm border border-white dark:border-gray-800" 
+                            style={{ backgroundColor: assignee.color }}
+                            title={`Assegnato a: ${assignee.name}`}
+                        >
+                            {assignee.name.substring(0, 1).toUpperCase()}
+                        </div>
+                    ) : (
+                        <div className="w-6 h-6"></div> // Spacer
                     )}
                 </div>
             </div>
@@ -581,12 +658,15 @@ const App: React.FC = () => {
                         eventPropGetter={eventPropGetter}
                         messages={calendarMessages}
                         formats={calendarFormats}
-                        popup={true}
-                        onDrillDown={handleDrillDown}
-                        // Questo evita la sovrapposizione brutale nelle viste week/day
+                        popup={false} // Disabilita il popup nativo
+                        onDrillDown={handleDrillDown} // Gestisce il click sul numero del giorno
+                        onShowMore={handleShowMore} // Gestisce il click su "+ N altri"
                         dayLayoutAlgorithm="no-overlap" 
                         components={{
                             event: CustomEvent,
+                            agenda: {
+                                event: CustomAgendaEvent,
+                            },
                             toolbar: (props: ToolbarProps) => <CustomToolbar {...props} />,
                         }}
                     />
@@ -638,6 +718,21 @@ const App: React.FC = () => {
                 <ChangelogModal 
                     isOpen={isChangelogModalOpen}
                     onClose={() => setIsChangelogModalOpen(false)}
+                />
+            )}
+            
+            {dayModalData.isOpen && (
+                <DayDetailsModal
+                    isOpen={dayModalData.isOpen}
+                    onClose={() => setDayModalData(prev => ({ ...prev, isOpen: false }))}
+                    date={dayModalData.date}
+                    posts={dayModalData.posts}
+                    teamMembers={teamMembers}
+                    channels={socialChannels}
+                    onEditPost={(post) => {
+                        setSelectedEvent(post);
+                        setIsPostModalOpen(true);
+                    }}
                 />
             )}
 
