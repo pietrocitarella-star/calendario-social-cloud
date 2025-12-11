@@ -53,9 +53,13 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
     setFormData(prev => {
         const updated = { ...prev, [name]: value };
 
-        // AUTOMAZIONE: Se seleziono YouTube, imposto automaticamente il tipo su Video
-        if (name === 'social' && value === 'YouTube') {
-            updated.postType = PostType.Video;
+        // AUTOMAZIONE: Logica intelligente per il tipo di contenuto in base al canale
+        if (name === 'social') {
+            if (value === 'YouTube') {
+                updated.postType = PostType.Video;
+            } else if (value === 'Telegram' || value === 'WhatsApp') {
+                updated.postType = PostType.Update; // 'aggiornamento'
+            }
         }
 
         return updated;

@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { Post, SocialChannel, PostStatus, PostType } from '../types';
+import { Post, SocialChannel, PostStatus, PostType, TeamMember } from '../types';
 import moment from 'moment';
 import 'moment/locale/it';
 
@@ -11,6 +11,7 @@ interface ReportsModalProps {
     onClose: () => void;
     posts: Post[];
     channels: SocialChannel[];
+    teamMembers: TeamMember[];
 }
 
 type TimeRange = 'CUSTOM' | '1M' | '3M' | '6M' | '1A' | 'ALL' | 'YEAR';
@@ -165,7 +166,7 @@ const ChartToggle: React.FC<{ current: ChartType; onChange: (type: ChartType) =>
     </div>
 );
 
-const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, channels }) => {
+const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, channels, teamMembers }) => {
     const [timeRange, setTimeRange] = useState<TimeRange>('6M');
     const [customStartDate, setCustomStartDate] = useState('');
     const [customEndDate, setCustomEndDate] = useState('');
@@ -177,7 +178,8 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     const [chartPrefs, setChartPrefs] = useState({
         status: 'donut' as ChartType,
         channel: 'bar' as ChartType,
-        type: 'bar' as ChartType
+        type: 'bar' as ChartType,
+        team: 'bar' as ChartType
     });
     
     // Genera i nomi dei mesi
@@ -284,8 +286,26 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
             { label: 'Altri', value: totalPosts - published - scheduled - drafts - filteredPosts.filter(p => p.status === PostStatus.NeedsApproval).length, color: 'bg-gray-400' },
         ].filter(d => d.value > 0);
 
-        return { totalPosts, published, scheduled, drafts, netPublished, postsByChannel, postsByType, statusData };
-    }, [filteredPosts, channels]);
+        // --- TEAM STATS LOGIC ---
+        // Filtriamo solo i post PUBBLICATI che hanno un assegnatario
+        const teamPublishedCounts: Record<string, number> = {};
+        filteredPosts.filter(p => p.status === PostStatus.Published && p.assignedTo).forEach(p => {
+            if (p.assignedTo) {
+                teamPublishedCounts[p.assignedTo] = (teamPublishedCounts[p.assignedTo] || 0) + 1;
+            }
+        });
+
+        const teamStats = Object.entries(teamPublishedCounts).map(([id, count]) => {
+             const member = teamMembers.find(m => m.id === id);
+             return {
+                 label: member ? member.name : 'Utente rimosso',
+                 value: count,
+                 color: member ? member.color : '#9ca3af'
+             };
+        }).sort((a,b) => b.value - a.value);
+
+        return { totalPosts, published, scheduled, drafts, netPublished, postsByChannel, postsByType, statusData, teamStats };
+    }, [filteredPosts, channels, teamMembers]);
 
     const handlePrint = () => window.print();
 
@@ -313,6 +333,10 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
             ['DISTRIBUZIONE PER TIPO CONTENUTO'],
             ['Tipo', 'Numero Post'],
             ...stats.postsByType.map(t => [t.label, t.value]),
+            [],
+            ['PERFORMANCE TEAM (Post Pubblicati)'],
+            ['Membro', 'Post Pubblicati'],
+            ...stats.teamStats.map(m => [m.label, m.value]),
             []
         ];
 
@@ -484,12 +508,12 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             <div className="hidden md:block"></div> 
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:grid-cols-2 print:block">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 print:grid-cols-2 print:block">
                             
                             {/* Status Distribution */}
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col print:border-gray-300 print:mb-4 print:break-inside-avoid">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white print:text-black">Stato Contenuti</h3>
+                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white print:text-black">Stato Contenuti</h3>
                                     <ChartToggle current={chartPrefs.status} onChange={(t) => setChartPrefs(prev => ({...prev, status: t}))} />
                                 </div>
                                 <div className="flex-grow flex items-center justify-center min-h-[200px]">
@@ -503,7 +527,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             {/* Channel Performance */}
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 print:border-gray-300 print:mb-4 print:break-inside-avoid">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white print:text-black">Top Canali</h3>
+                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white print:text-black">Top Canali</h3>
                                     <ChartToggle current={chartPrefs.channel} onChange={(t) => setChartPrefs(prev => ({...prev, channel: t}))} />
                                 </div>
                                 <div className="flex-grow flex items-center justify-center min-h-[200px]">
@@ -517,7 +541,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             {/* Type Performance */}
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 print:border-gray-300 print:mb-4 print:break-inside-avoid">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-lg font-bold text-gray-800 dark:text-white print:text-black">Tipologia Contenuti</h3>
+                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white print:text-black">Tipologia</h3>
                                     <ChartToggle current={chartPrefs.type} onChange={(t) => setChartPrefs(prev => ({...prev, type: t}))} />
                                 </div>
                                 <div className="flex-grow flex items-center justify-center min-h-[200px]">
@@ -525,6 +549,23 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                                         ? <DonutChart data={stats.postsByType} />
                                         : <ProgressBarChart data={stats.postsByType} />
                                     }
+                                </div>
+                            </div>
+
+                             {/* Team Performance - NUOVO */}
+                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 print:border-gray-300 print:mb-4 print:break-inside-avoid">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white print:text-black">Performance Team</h3>
+                                    <ChartToggle current={chartPrefs.team} onChange={(t) => setChartPrefs(prev => ({...prev, team: t}))} />
+                                </div>
+                                <div className="flex-grow flex items-center justify-center min-h-[200px]">
+                                    {stats.teamStats.length === 0 ? (
+                                        <p className="text-sm text-gray-400 text-center">Nessun post pubblicato assegnato nel periodo.</p>
+                                    ) : (
+                                        chartPrefs.team === 'donut' 
+                                            ? <DonutChart data={stats.teamStats} />
+                                            : <ProgressBarChart data={stats.teamStats} />
+                                    )}
                                 </div>
                             </div>
                         </div>

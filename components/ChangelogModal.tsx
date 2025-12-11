@@ -20,7 +20,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.9.0',
-        date: '08/11/2025',
+        date: '07/11/2025',
         changes: [
             'Vista Agenda Dettagliata: La visualizzazione lista ora mostra Avatar assegnatario, Tipo di contenuto, Badge stato e Canale social.',
             'Report Flessibili: Aggiunto selettore anno manuale (< 2025 >) nella modale report.',
@@ -30,7 +30,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.8.5',
-        date: '08/11/2025',
+        date: '06/11/2025',
         changes: [
             'UX Mese/Settimana Rivoluzionata: Il link "+ Altri" è ora una barra/pulsante "Vedi tutti (+N)" ben visibile che occupa tutta la larghezza della cella.',
             'Report Chirurgici: Aggiunta griglia rapida dei mesi (Gen, Feb...) e selettore date preciso "Dal... Al...".',
@@ -39,7 +39,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.8.0',
-        date: '08/11/2025',
+        date: '05/11/2025',
         changes: [
             'Performance Boost: Ora il calendario carica solo i post necessari per il periodo visualizzato (+2 mesi buffer), rendendo l\'app velocissima anche con migliaia di post.',
             'Report On-Demand: I dati dei report ora vengono scaricati integralmente solo quando richiesto, alleggerendo l\'avvio dell\'app.',
@@ -48,7 +48,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.7.6',
-        date: '08/11/2025',
+        date: '04/11/2025',
         changes: [
             'Fix Stabilità: Risolto bug che faceva sparire il link "+ Altri" cambiando vista.',
             'Vista Settimanale: Layout ottimizzato per colonne strette, con altezza bilanciata e testo che va a capo.'
@@ -56,7 +56,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.7.5',
-        date: '08/11/2025',
+        date: '04/11/2025',
         changes: [
             'Fix Sovrapposizione: Nella vista Giorno/Settimana i post ora si affiancano automaticamente senza sovrapporsi ("no-overlap").',
             'Layout Spazioso: Aumentata notevolmente l\'altezza delle righe orarie per una migliore leggibilità.',
@@ -66,7 +66,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.7.4',
-        date: '08/11/2025',
+        date: '03/11/2025',
         changes: [
             'Fix Critico: Risolto problema del pulsante "+ altri" che non appariva nella vista mensile.',
             'Design: Card degli eventi ridisegnate per essere più leggibili e compatte.',
@@ -75,7 +75,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.7.3',
-        date: '08/11/2025',
+        date: '03/11/2025',
         changes: [
             'Visual Improvement: Le etichette dei canali social nelle card sono ora colorate (Badge) per un riconoscimento immediato.',
             'Fix: Risolto problema di visibilità del pulsante "+ altri" nella vista mensile.'
@@ -83,7 +83,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.7.2',
-        date: '08/11/2025',
+        date: '02/11/2025',
         changes: [
             'Design Refresh: Nuovo stile "Minimal" per le card del calendario.',
             'Migliorata leggibilità: rimosso il colore di sfondo pieno dagli eventi.',
@@ -93,7 +93,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.7.1',
-        date: '07/11/2025',
+        date: '02/11/2025',
         changes: [
             'Aggiunto tipo di contenuto "Collaborazione".',
             'Automazione Intelligente: selezionando YouTube, il tipo contenuto diventa automaticamente "Video".'
@@ -101,7 +101,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.7.0',
-        date: '07/11/2025',
+        date: '01/11/2025',
         changes: [
             'Nuova funzionalità "Team": gestisci collaboratori e colleghi.',
             'Assegnazione Post: assegna task specifici ai membri del team.',
@@ -111,7 +111,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.5.0',
-        date: '06/11/2025',
+        date: '30/10/2025',
         changes: [
             'Aggiunto editor Markdown per le note (Grassetto, Corsivo, Liste).',
             'Introdotta modalità "Scrivi" e "Anteprima" nel dettaglio post.',
@@ -122,7 +122,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.4.0',
-        date: '06/11/2025',
+        date: '28/10/2025',
         changes: [
             'Nuova sezione Reportistica avanzata.',
             'Esportazione dati in CSV ed Excel.',
@@ -133,7 +133,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.3.0',
-        date: '05/11/2025',
+        date: '25/10/2025',
         changes: [
             'Introdotta cronologia versioni dei singoli post.',
             'Funzionalità di ripristino versioni precedenti.',
@@ -143,7 +143,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.2.0',
-        date: '04/11/2025',
+        date: '20/10/2025',
         changes: [
             'Filtri rapidi per canale social nel calendario.',
             'Visualizzazione "Popup" per giorni con molti post.',
@@ -153,7 +153,7 @@ const changelogData: ChangeLogEntry[] = [
     },
     {
         version: '1.0.0',
-        date: '01/11/2025',
+        date: '15/10/2025',
         changes: [
             'Rilascio iniziale.',
             'Gestione calendario drag & drop.',

@@ -77,8 +77,8 @@
     }
     
     /* --- TRASFORMAZIONE SHOW MORE IN PULSANTE "VEDI TUTTI" --- */
-    /* MODIFICA: Aggiunto 'body' per aumentare la specificità CSS e vincere contro gli stili di default in produzione */
-    body .rbc-row-segment .rbc-show-more,
+    /* MODIFICA: Specificità CSS aumentata al massimo per vincere contro la minificazione di produzione */
+    html body .rbc-calendar .rbc-month-view .rbc-row-segment .rbc-show-more,
     .rbc-row-segment .rbc-show-more {
         background-color: #eff6ff !important; /* blue-50 */
         color: #1d4ed8 !important; /* blue-700 */
@@ -96,8 +96,10 @@
         transition: all 0.2s;
         pointer-events: auto !important; /* Forza la cliccabilità */
         cursor: pointer !important;
+        opacity: 1 !important;
+        visibility: visible !important;
     }
-    .rbc-row-segment .rbc-show-more:hover {
+    html body .rbc-calendar .rbc-month-view .rbc-row-segment .rbc-show-more:hover {
         background-color: #2563eb !important; /* blue-600 */
         color: white !important;
         border-color: #1e40af !important;

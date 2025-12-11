@@ -691,6 +691,7 @@ const App: React.FC = () => {
                     onClose={() => setIsReportsModalOpen(false)}
                     posts={reportPosts} // Passiamo i dati completi caricati on demand
                     channels={socialChannels}
+                    teamMembers={teamMembers} // Passiamo i membri del team
                 />
             )}
             
