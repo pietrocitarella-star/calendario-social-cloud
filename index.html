@@ -38,87 +38,50 @@
         overflow-y: hidden; /* Evita doppio scroll */
     }
 
-    /* --- VISTA MESE (Compatta) --- */
+    /* --- VISTA MESE --- */
     
-    /* Riduzione estrema dell'altezza riga evento nel mese per fare spazio al pulsante Show More */
-    .rbc-month-view .rbc-event {
-        padding: 0px !important;
-        margin: 0px 2px 1px 2px !important; /* Margine verticale quasi nullo */
-        background: transparent !important;
-        border: none !important;
-        outline: none !important;
-        height: 18px !important; /* Altezza fissa ridotta */
-        line-height: 18px !important;
-    }
-
-    /* Stile della card nel mese */
-    .rbc-month-view .custom-calendar-event {
-        height: 100% !important;
-        font-size: 0.7rem !important;
-        box-shadow: none;
-        border-radius: 2px !important;
-        border-left-width: 3px !important;
-        padding: 0 4px !important;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        background-color: rgba(255,255,255,0.95) !important; /* Sfondo più opaco per leggibilità */
-        overflow: hidden;
-        white-space: nowrap; 
-    }
-    
-    .dark .rbc-month-view .custom-calendar-event {
-        background-color: rgba(55, 65, 81, 0.95) !important;
-    }
-
-    /* Nascondi elementi non essenziali nel mese */
-    .rbc-month-view .event-avatar, 
-    .rbc-month-view .event-status-dot {
+    /* NASCONDI TUTTI GLI EVENTI STANDARD NEL MESE */
+    /* Usiamo il custom header per mostrare il bottone */
+    .rbc-month-view .rbc-event,
+    .rbc-month-view .rbc-show-more, /* Nascondi anche il link nativo "+ N more" */
+    .rbc-month-view .rbc-row-segment .rbc-show-more {
         display: none !important;
     }
-    
-    /* --- TRASFORMAZIONE SHOW MORE IN PULSANTE "VEDI TUTTI" --- */
-    /* MODIFICA: Posizionamento e dimensione ottimizzati per non "sparire" in basso */
-    html body .rbc-calendar .rbc-month-view .rbc-row-segment .rbc-show-more,
-    .rbc-row-segment .rbc-show-more {
-        background-color: #eff6ff !important; /* blue-50 */
-        color: #1d4ed8 !important; /* blue-700 */
-        font-weight: 700 !important;
-        font-size: 0.7rem !important; /* Font leggermente più piccolo per stare dentro */
-        padding: 2px 0 !important; /* Padding ridotto */
-        border-radius: 4px;
-        margin: 1px 2px 0 2px !important;
-        display: block !important;
-        width: calc(100% - 4px) !important;
-        text-align: center !important;
-        z-index: 100 !important;
-        position: relative !important;
-        text-decoration: none !important;
-        border: 1px solid #bfdbfe !important;
-        transition: all 0.2s;
-        pointer-events: auto !important;
-        cursor: pointer !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-        height: auto !important;
-        line-height: normal !important;
-        max-height: 20px !important; /* Evita che diventi troppo alto */
-    }
-    html body .rbc-calendar .rbc-month-view .rbc-row-segment .rbc-show-more:hover {
-        background-color: #2563eb !important; /* blue-600 */
-        color: white !important;
-        border-color: #1e40af !important;
-    }
-    .dark .rbc-row-segment .rbc-show-more {
-        background-color: #1f2937 !important;
-        color: #93c5fd !important;
-        border-color: #374151 !important;
-    }
-    .dark .rbc-row-segment .rbc-show-more:hover {
-        background-color: #374151 !important;
+
+    /* Assicuriamoci che la cella della data abbia spazio per il nostro bottone custom */
+    .rbc-month-view .rbc-date-cell {
+        padding-right: 4px;
+        padding-top: 4px;
+        /* height: 100%;  NON forzare altezza qui, lascia che il contenuto gestisca */
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start; /* Allinea a sinistra */
     }
 
     /* --- VISTA GIORNO E SETTIMANA --- */
+
+    /* FIX INTESTAZIONE SETTIMANA: Forza altezza per mostrare due righe (Data + Contatore) */
+    .rbc-time-header-content .rbc-header {
+        height: auto !important; /* Lascia espandere l'altezza */
+        min-height: 60px !important; /* Altezza minima garantita per due righe */
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+        white-space: normal !important; /* Permetti testo a capo */
+        overflow: visible !important; /* Evita clipping */
+        display: flex !important;
+        flex-direction: column !important; /* Forza layout verticale */
+        justify-content: center !important;
+        align-items: center !important;
+    }
+    
+    .rbc-time-header-content {
+        height: auto !important; /* Permetti al contenitore padre di espandersi */
+    }
+    
+    /* Riduce lo spazio della riga "all day" se vuota, per dare priorità all'header */
+    .rbc-allday-cell {
+        display: none; /* Se non usiamo eventi "all day", nascondiamola per pulizia */
+    }
 
     .rbc-timeslot-group {
         min-height: 80px !important; 
@@ -179,13 +142,14 @@
         background-color: rgba(59, 130, 246, 0.05); 
     }
     
+    /* Header Base (Mese) */
     .rbc-header {
         padding: 8px !important;
         font-size: 0.9rem;
         font-weight: 700;
         text-transform: capitalize;
     }
-
+    
     /* --- VISTA AGENDA (Lista) --- */
     
     .rbc-agenda-view table.rbc-agenda-table {
