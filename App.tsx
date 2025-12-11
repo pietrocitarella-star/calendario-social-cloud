@@ -87,15 +87,6 @@ const calendarMessages = {
   showMore: (total: number) => `Vedi tutti (+${total})`
 };
 
-const calendarFormats: Formats = {
-    monthHeaderFormat: (date, culture, local) => local.format(date, 'MMMM YYYY', culture),
-    weekdayFormat: (date, culture, local) => local.format(date, 'dddd', culture),
-    dayHeaderFormat: (date, culture, local) => local.format(date, 'dddd DD/MM/YYYY', culture),
-    dayRangeHeaderFormat: ({ start, end }, culture, local) =>
-        local.format(start, 'DD MMM', culture) + ' - ' + local.format(end, 'DD MMM YYYY', culture),
-    agendaDateFormat: (date, culture, local) => local.format(date, 'ddd DD MMM', culture),
-};
-
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
@@ -139,6 +130,31 @@ const App: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const defaultScrollTime = useMemo(() => new Date(1970, 1, 1, 9, 0, 0), []);
+
+    // Configurazione Formati Calendario Dinamica (include conteggio post)
+    // Usiamo useMemo così si aggiorna quando cambiano i post
+    const calendarFormats = useMemo<Formats>(() => ({
+        monthHeaderFormat: (date, culture, local) => local.format(date, 'MMMM YYYY', culture),
+        weekdayFormat: (date, culture, local) => local.format(date, 'dddd', culture),
+        dayHeaderFormat: (date, culture, local) => local.format(date, 'dddd DD/MM/YYYY', culture),
+        dayRangeHeaderFormat: ({ start, end }, culture, local) =>
+            local.format(start, 'DD MMM', culture) + ' - ' + local.format(end, 'DD MMM YYYY', culture),
+        agendaDateFormat: (date, culture, local) => local.format(date, 'ddd DD MMM', culture),
+        
+        // MODIFICA: Header della colonna nella vista Settimana (es: Lun 12/02 (3))
+        dayFormat: (date, culture, local) => {
+             const dayStart = moment(date).startOf('day');
+             const dayEnd = moment(date).endOf('day');
+             
+             // Filtriamo i post per questo giorno specifico
+             const count = posts.filter(p => 
+                 moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]')
+             ).length;
+
+             const dateStr = local.format(date, 'ddd DD/MM', culture);
+             return count > 0 ? `${dateStr} (${count})` : dateStr;
+        }
+    }), [posts]); // Dipendenza [posts] per ricalcolare quando i dati cambiano
 
     // AUTH LISTENER
     useEffect(() => {
@@ -658,7 +674,7 @@ const App: React.FC = () => {
                         onSelectEvent={handleSelectEvent}
                         eventPropGetter={eventPropGetter}
                         messages={calendarMessages}
-                        formats={calendarFormats}
+                        formats={calendarFormats} // Passiamo i formati dinamici
                         popup={false} // Disabilita il popup nativo
                         onDrillDown={handleDrillDown} // Gestisce il click sul numero del giorno
                         onShowMore={handleShowMore} // Gestisce il click su "+ N altri"

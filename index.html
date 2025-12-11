@@ -40,14 +40,15 @@
 
     /* --- VISTA MESE (Compatta) --- */
     
+    /* Riduzione estrema dell'altezza riga evento nel mese per fare spazio al pulsante Show More */
     .rbc-month-view .rbc-event {
         padding: 0px !important;
-        margin: 1px 2px !important;
+        margin: 0px 2px 1px 2px !important; /* Margine verticale quasi nullo */
         background: transparent !important;
         border: none !important;
         outline: none !important;
-        height: 20px !important; /* Ancora più compatto */
-        line-height: 20px !important;
+        height: 18px !important; /* Altezza fissa ridotta */
+        line-height: 18px !important;
     }
 
     /* Stile della card nel mese */
@@ -61,13 +62,13 @@
         display: flex;
         align-items: center;
         gap: 4px;
-        background-color: rgba(255,255,255,0.8) !important;
+        background-color: rgba(255,255,255,0.95) !important; /* Sfondo più opaco per leggibilità */
         overflow: hidden;
         white-space: nowrap; 
     }
     
     .dark .rbc-month-view .custom-calendar-event {
-        background-color: rgba(55, 65, 81, 0.9) !important;
+        background-color: rgba(55, 65, 81, 0.95) !important;
     }
 
     /* Nascondi elementi non essenziali nel mese */
@@ -77,30 +78,31 @@
     }
     
     /* --- TRASFORMAZIONE SHOW MORE IN PULSANTE "VEDI TUTTI" --- */
-    /* MODIFICA: Specificità CSS aumentata al massimo per vincere contro la minificazione di produzione */
+    /* MODIFICA: Posizionamento e dimensione ottimizzati per non "sparire" in basso */
     html body .rbc-calendar .rbc-month-view .rbc-row-segment .rbc-show-more,
     .rbc-row-segment .rbc-show-more {
         background-color: #eff6ff !important; /* blue-50 */
         color: #1d4ed8 !important; /* blue-700 */
         font-weight: 700 !important;
-        font-size: 0.75rem !important;
-        padding: 4px 0 !important; /* Padding verticale */
+        font-size: 0.7rem !important; /* Font leggermente più piccolo per stare dentro */
+        padding: 2px 0 !important; /* Padding ridotto */
         border-radius: 4px;
-        margin: 2px 2px 0 2px !important;
-        display: block !important; /* Occupa tutta la riga */
+        margin: 1px 2px 0 2px !important;
+        display: block !important;
         width: calc(100% - 4px) !important;
         text-align: center !important;
-        z-index: 100 !important; /* Z-Index aumentato */
+        z-index: 100 !important;
         position: relative !important;
         text-decoration: none !important;
         border: 1px solid #bfdbfe !important;
         transition: all 0.2s;
-        pointer-events: auto !important; /* Forza la cliccabilità */
+        pointer-events: auto !important;
         cursor: pointer !important;
         opacity: 1 !important;
         visibility: visible !important;
         height: auto !important;
         line-height: normal !important;
+        max-height: 20px !important; /* Evita che diventi troppo alto */
     }
     html body .rbc-calendar .rbc-month-view .rbc-row-segment .rbc-show-more:hover {
         background-color: #2563eb !important; /* blue-600 */
