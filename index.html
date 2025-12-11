@@ -90,7 +90,8 @@
         display: block !important; /* Occupa tutta la riga */
         width: calc(100% - 4px) !important;
         text-align: center !important;
-        z-index: 50 !important;
+        z-index: 100 !important; /* Z-Index aumentato */
+        position: relative !important;
         text-decoration: none !important;
         border: 1px solid #bfdbfe !important;
         transition: all 0.2s;
@@ -98,6 +99,8 @@
         cursor: pointer !important;
         opacity: 1 !important;
         visibility: visible !important;
+        height: auto !important;
+        line-height: normal !important;
     }
     html body .rbc-calendar .rbc-month-view .rbc-row-segment .rbc-show-more:hover {
         background-color: #2563eb !important; /* blue-600 */
@@ -213,6 +216,11 @@
     }
     .dark .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
         border-bottom-color: #374151 !important;
+    }
+
+    /* FIX SCROLL AGENDA: Aggiungiamo padding extra in fondo al contenuto scrollabile */
+    .rbc-agenda-content {
+        padding-bottom: 60px !important; /* Spazio extra per evitare che l'ultimo elemento sia tagliato */
     }
 
     .rbc-agenda-date-cell {

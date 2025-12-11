@@ -639,7 +639,8 @@ const App: React.FC = () => {
                 
                 <StatusLegend />
                 
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg" style={{ height: 'calc(100vh - 220px)' }}>
+                {/* FIX SCROLL: Aggiunto pb-4 al container e ridotta l'altezza calcolata di 20px per dare respiro in basso */}
+                <div className="bg-white dark:bg-gray-800 p-4 pb-10 rounded-lg shadow-lg" style={{ height: 'calc(100vh - 240px)' }}>
                     <Calendar
                         localizer={localizer}
                         culture='it'
