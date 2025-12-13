@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 // --- ISTRUZIONI IMPORTANTI ---
 // 1. Vai su https://console.firebase.google.com/
@@ -27,3 +27,6 @@ export const db = getFirestore(app);
 
 // Esportiamo il servizio di autenticazione
 export const auth = getAuth(app);
+
+// Configurazione Google Auth Provider
+export const googleProvider = new GoogleAuthProvider();

@@ -1,6 +1,16 @@
 
 import { PostStatus, PostType } from './types';
 
+// LISTA EMAIL AUTORIZZATE (Whitelist)
+// Aggiungi qui le email che possono accedere all'app.
+// Tutte le altre verranno bloccate anche se fanno il login con Google corretto.
+export const ALLOWED_EMAILS = [
+    'pietro.citarella@gmail.com',         // <--- SOSTITUISCI CON LA TUA
+    'madnap83@gmail.com',        // <--- SOSTITUISCI
+    'salvatore.russo@gmail.com',        // <--- SOSTITUISCI
+    
+];
+
 // Ordiniamo alfabeticamente i tipi di post per migliorare l'UX nei menu a tendina
 export const POST_STATUSES: PostStatus[] = Object.values(PostStatus);
 export const POST_TYPES: PostType[] = Object.values(PostType).sort((a, b) => a.localeCompare(b));

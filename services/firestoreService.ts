@@ -47,7 +47,7 @@ export const subscribeToPosts = (
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const posts: Post[] = [];
         snapshot.forEach((doc) => {
-            posts.push({ id: doc.id, ...doc.data() } as Post);
+            posts.push({ id: doc.id, ...(doc.data() as any) } as Post);
         });
         callback(posts);
     }, (error) => {
@@ -71,7 +71,7 @@ export const fetchAllPosts = async (startDate?: string): Promise<Post[]> => {
         const snapshot = await getDocs(q);
         const posts: Post[] = [];
         snapshot.forEach((doc) => {
-            posts.push({ id: doc.id, ...doc.data() } as Post);
+            posts.push({ id: doc.id, ...(doc.data() as any) } as Post);
         });
         return posts;
     } catch (e) {
@@ -205,7 +205,7 @@ export const subscribeToChannels = (callback: (channels: SocialChannel[]) => voi
     const unsubscribe = onSnapshot(q, async (snapshot) => {
         let channels: SocialChannel[] = [];
         snapshot.forEach((doc) => {
-            channels.push({ id: doc.id, ...doc.data() } as SocialChannel);
+            channels.push({ id: doc.id, ...(doc.data() as any) } as SocialChannel);
         });
 
         if (channels.length === 0) {
@@ -256,7 +256,7 @@ export const subscribeToTeam = (callback: (members: TeamMember[]) => void) => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
         let members: TeamMember[] = [];
         snapshot.forEach((doc) => {
-            members.push({ id: doc.id, ...doc.data() } as TeamMember);
+            members.push({ id: doc.id, ...(doc.data() as any) } as TeamMember);
         });
         callback(members);
     }, (error) => {

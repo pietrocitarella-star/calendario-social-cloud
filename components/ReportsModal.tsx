@@ -310,13 +310,32 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     const handlePrint = () => window.print();
 
     const handleExportCSV = () => {
-        let periodLabel = RANGE_LABELS[timeRange];
-        if (timeRange === 'CUSTOM') periodLabel = `${customStartDate} - ${customEndDate}`;
+        // Logica migliorata per la stringa del periodo
+        let dateRangeLabel = '';
+        const now = moment();
+        
+        if (timeRange === 'CUSTOM' && customStartDate && customEndDate) {
+            dateRangeLabel = `${moment(customStartDate).format('DD/MM/YYYY')} - ${moment(customEndDate).format('DD/MM/YYYY')}`;
+        } else if (timeRange === 'YEAR') {
+            dateRangeLabel = `01/01/${selectedYear} - 31/12/${selectedYear}`;
+        } else if (timeRange === 'ALL') {
+             dateRangeLabel = 'Tutto lo storico';
+        } else {
+             // Presets come 1M, 3M...
+             const rangeMap: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1A': 12 };
+             if (rangeMap[timeRange]) {
+                 const start = now.clone().subtract(rangeMap[timeRange], 'months').format('DD/MM/YYYY');
+                 const end = now.format('DD/MM/YYYY');
+                 dateRangeLabel = `${start} - ${end} (${RANGE_LABELS[timeRange]})`;
+             } else {
+                 dateRangeLabel = RANGE_LABELS[timeRange];
+             }
+        }
 
         const rows = [
             ['REPORT ANALITICO CALENDARIO EDITORIALE'],
             ['Data Generazione', moment().format('DD/MM/YYYY HH:mm')],
-            ['Periodo Analizzato', periodLabel],
+            ['Periodo Analizzato', dateRangeLabel], // Usa la nuova label dettagliata
             ['Filtro Ricerca', searchTerm || 'Nessuno'],
             [],
             ['KPI GENERALI'],
@@ -355,11 +374,56 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         <div className="fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4 print:p-0 print:bg-white print:static">
             <style>{`
                 @media print {
-                    body > *:not(#reports-root) { display: none !important; }
-                    #reports-root { display: block !important; position: absolute; top: 0; left: 0; width: 100%; height: auto; }
-                    #reports-modal-content { box-shadow: none !important; border: none !important; max-width: 100% !important; width: 100% !important; max-height: none !important; overflow: visible !important; }
-                    .no-print { display: none !important; }
-                    ::-webkit-scrollbar { display: none; }
+                    /* Imposta margini e dimensioni pagina */
+                    @page { size: auto; margin: 5mm; }
+
+                    /* Nascondi tutto il contenuto della pagina */
+                    body {
+                        visibility: hidden;
+                        background-color: white;
+                    }
+
+                    /* Sovrascrivi overflow nascosto di body/root per permettere la stampa multipagina */
+                    html, body, #root {
+                        overflow: visible !important;
+                        height: auto !important;
+                    }
+
+                    /* Rendi visibile e posiziona il contenitore del report */
+                    #reports-root {
+                        visibility: visible !important;
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 100%;
+                        margin: 0;
+                        padding: 0;
+                        background-color: white;
+                        z-index: 99999;
+                    }
+
+                    /* Assicura che tutti i figli del report siano visibili */
+                    #reports-root * {
+                        visibility: visible !important;
+                    }
+
+                    /* Reset degli stili della modale per adattarsi alla pagina A4 */
+                    #reports-modal-content {
+                        box-shadow: none !important;
+                        border: none !important;
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        max-height: none !important;
+                        overflow: visible !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                        background: white !important;
+                    }
+
+                    /* Nascondi elementi specifici non necessari in stampa */
+                    .no-print {
+                        display: none !important;
+                    }
                 }
             `}</style>
             

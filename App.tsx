@@ -19,7 +19,7 @@ import {
     saveTeamMembers,
     deleteTeamMemberFromDb
 } from './services/firestoreService';
-import { STATUS_COLORS } from './constants';
+import { STATUS_COLORS, ALLOWED_EMAILS } from './constants';
 import { exportPostsToJson, exportPostsToCsv } from './utils/fileHandlers';
 import PostModal from './components/PostModal';
 import CalendarHeader from './components/CalendarHeader';
@@ -30,7 +30,7 @@ import TeamMembersModal from './components/TeamMembersModal';
 import StatusLegend from './components/StatusLegend';
 import ChangelogModal from './components/ChangelogModal';
 import LoginScreen from './components/LoginScreen';
-import DayDetailsModal from './components/DayDetailsModal'; // Importa la nuova modale
+import DayDetailsModal from './components/DayDetailsModal'; 
 import { auth } from './firebaseConfig';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 
@@ -89,10 +89,11 @@ const calendarMessages = {
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
+    const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null); // Nuovo stato per gestione accesso
     const [authLoading, setAuthLoading] = useState(true);
 
-    const [posts, setPosts] = useState<Post[]>([]); // Post visualizzati nel calendario (filtrati per data)
-    const [reportPosts, setReportPosts] = useState<Post[]>([]); // Post per i report (caricati on demand)
+    const [posts, setPosts] = useState<Post[]>([]); 
+    const [reportPosts, setReportPosts] = useState<Post[]>([]); 
     const [isLoadingReportData, setIsLoadingReportData] = useState(false);
 
     const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -114,7 +115,6 @@ const App: React.FC = () => {
     const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
     const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
     
-    // Nuova modale per dettagli giorno
     const [dayModalData, setDayModalData] = useState<{ isOpen: boolean, date: Date | null, posts: Post[] }>({
         isOpen: false,
         date: null,
@@ -131,7 +131,6 @@ const App: React.FC = () => {
 
     const defaultScrollTime = useMemo(() => new Date(1970, 1, 1, 9, 0, 0), []);
 
-    // Configurazione Formati Calendario
     const calendarFormats = useMemo<Formats>(() => ({
         monthHeaderFormat: (date, culture, local) => local.format(date, 'MMMM YYYY', culture),
         weekdayFormat: (date, culture, local) => local.format(date, 'dddd', culture),
@@ -141,10 +140,52 @@ const App: React.FC = () => {
         agendaDateFormat: (date, culture, local) => local.format(date, 'ddd DD MMM', culture),
     }), []); 
 
-    // AUTH LISTENER
+    // AUTH LISTENER: LOGICA IBRIDA
+    // 1. Password Provider -> Sempre OK (Gestito da Firebase Console)
+    // 2. Google Provider -> Controllo Whitelist (constants.ts)
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser);
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            if (currentUser) {
+                // Verifichiamo il metodo di accesso
+                const isPasswordAuth = currentUser.providerData.some(p => p.providerId === 'password');
+                const isGoogleAuth = currentUser.providerData.some(p => p.providerId === 'google.com');
+                const email = currentUser.email;
+
+                if (isPasswordAuth) {
+                    // CASO 1: Accesso con Email/Password (Nativo Firebase)
+                    // Consideriamo l'utente autorizzato perché ha le credenziali corrette
+                    setUser(currentUser);
+                    setIsAuthorized(true);
+                } else if (isGoogleAuth && email) {
+                    // CASO 2: Accesso con Google
+                    // Dobbiamo verificare la whitelist perché chiunque ha un account Google
+                    const normalizedEmail = email.toLowerCase().trim();
+                    const allowedEmailsLower = ALLOWED_EMAILS.map(e => e.toLowerCase().trim());
+                    
+                    if (allowedEmailsLower.includes(normalizedEmail)) {
+                        setUser(currentUser);
+                        setIsAuthorized(true);
+                    } else {
+                        // Utente Google NON in whitelist
+                        console.warn(`Accesso Google negato: ${email} non è in whitelist.`);
+                        setUser(currentUser); // Settiamo l'user per mostrare l'errore
+                        setIsAuthorized(false);
+                    }
+                } else {
+                    // Caso fallback (es. altri provider futuri o errori strani)
+                    // Se non sappiamo chi è, applichiamo la whitelist per sicurezza
+                    if (email && ALLOWED_EMAILS.map(e => e.toLowerCase().trim()).includes(email.toLowerCase().trim())) {
+                         setUser(currentUser);
+                         setIsAuthorized(true);
+                    } else {
+                        setUser(currentUser);
+                        setIsAuthorized(false);
+                    }
+                }
+            } else {
+                setUser(null);
+                setIsAuthorized(null);
+            }
             setAuthLoading(false);
         });
         return () => unsubscribe();
@@ -152,7 +193,7 @@ const App: React.FC = () => {
 
     // OTTIMIZZAZIONE: Carica solo i post del periodo visibile +/- 2 mesi di buffer
     useEffect(() => {
-        if (!user) {
+        if (!user || !isAuthorized) {
             setPosts([]);
             return;
         }
@@ -164,11 +205,11 @@ const App: React.FC = () => {
             setPosts(updatedPosts);
         });
         return () => unsubscribe(); 
-    }, [user, date, view]);
+    }, [user, isAuthorized, date, view]);
 
-    // REAL-TIME LISTENER FOR CHANNELS (Solo se loggato)
+    // REAL-TIME LISTENER FOR CHANNELS (Solo se loggato e autorizzato)
     useEffect(() => {
-        if (!user) {
+        if (!user || !isAuthorized) {
             setSocialChannels([]);
             return;
         }
@@ -176,11 +217,11 @@ const App: React.FC = () => {
             setSocialChannels(updatedChannels);
         });
         return () => unsubscribe();
-    }, [user]);
+    }, [user, isAuthorized]);
 
-    // REAL-TIME LISTENER FOR TEAM (Solo se loggato)
+    // REAL-TIME LISTENER FOR TEAM (Solo se loggato e autorizzato)
     useEffect(() => {
-        if (!user) {
+        if (!user || !isAuthorized) {
             setTeamMembers([]);
             return;
         }
@@ -188,13 +229,13 @@ const App: React.FC = () => {
             setTeamMembers(updatedMembers);
         });
         return () => unsubscribe();
-    }, [user]);
+    }, [user, isAuthorized]);
 
     useEffect(() => {
         setEvents(mapPostsToEvents(posts));
     }, [posts]);
 
-    // ---- HANDLERS PER REPORT E EXPORT ----
+    // ---- HANDLERS ----
     
     const handleShowReports = async () => {
         setIsLoadingReportData(true);
@@ -215,10 +256,9 @@ const App: React.FC = () => {
         exportPostsToCsv(allData);
     };
 
-    // -----------------------------------------------------------
-
-    // ---- NOTIFICATION LOGIC ----
+    // ---- NOTIFICATIONS ----
     const notifications = useMemo<AppNotification[]>(() => {
+        if (!isAuthorized) return [];
         const alerts: AppNotification[] = [];
         const now = moment();
         const tomorrow = moment().add(24, 'hours');
@@ -249,7 +289,7 @@ const App: React.FC = () => {
         });
 
         return alerts.sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf());
-    }, [posts]);
+    }, [posts, isAuthorized]);
 
     const handleNotificationClick = useCallback((postId: string) => {
         const post = posts.find(p => p.id === postId);
@@ -258,7 +298,6 @@ const App: React.FC = () => {
             setIsPostModalOpen(true);
         }
     }, [posts]);
-    // ---------------------------
 
     const filteredEvents = useMemo(() => {
         let result = events;
@@ -460,6 +499,8 @@ const App: React.FC = () => {
     const handleLogout = async () => {
         try {
             await signOut(auth);
+            setUser(null);
+            setIsAuthorized(null);
         } catch (error) {
             console.error("Logout error", error);
         }
@@ -476,6 +517,7 @@ const App: React.FC = () => {
         return { style, className: 'custom-calendar-event' };
     }, [socialChannels]);
 
+    // ... CustomEvent, CustomAgendaEvent, CustomWeekHeader, CustomMonthDateHeader ...
     const CustomEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => {
         const statusColor = STATUS_COLORS[event.status];
         const assignee = teamMembers.find(m => m.id === event.assignedTo);
@@ -556,48 +598,32 @@ const App: React.FC = () => {
         );
     };
     
-    // CUSTOM HEADER COMPONENT PER VISTA SETTIMANA
     const CustomWeekHeader: React.FC<HeaderProps> = ({ date, localizer }) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
-        
-        const count = posts.filter(p => 
-            moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]')
-        ).length;
+        const count = posts.filter(p => moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]')).length;
 
         return (
             <div className="flex flex-col items-center justify-center py-1 w-full">
-                <span className="text-sm font-semibold capitalize">
-                    {localizer.format(date, 'ddd DD/MM')}
-                </span>
-                <div className={`mt-2 w-full text-center py-1 rounded-md text-[11px] font-bold border transition-colors ${
-                    count > 0 
-                    ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' 
-                    : 'bg-transparent text-gray-300 border-transparent dark:text-gray-600'
-                }`}>
+                <span className="text-sm font-semibold capitalize">{localizer.format(date, 'ddd DD/MM')}</span>
+                <div className={`mt-2 w-full text-center py-1 rounded-md text-[11px] font-bold border transition-colors ${count > 0 ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'bg-transparent text-gray-300 border-transparent dark:text-gray-600'}`}>
                     {count > 0 ? `${count} Post` : '-'}
                 </div>
             </div>
         );
     };
     
-    // CUSTOM DATE HEADER PER VISTA MESE (Mostra il bottone riassuntivo)
     const CustomMonthDateHeader: React.FC<DateHeaderProps> = ({ date, label }) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
-        const count = posts.filter(p =>
-            moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]')
-        ).length;
+        const count = posts.filter(p => moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]')).length;
 
         return (
             <div className="flex flex-col items-start p-1 w-full relative" style={{ minHeight: '30px' }}>
                 <span className="text-sm font-semibold mb-1">{label}</span>
                 {count > 0 && (
                     <button
-                        onClick={(e) => {
-                            e.stopPropagation(); // Evita il drilldown standard
-                            handleShowMore([], date); // Apre la nostra modale
-                        }}
+                        onClick={(e) => { e.stopPropagation(); handleShowMore([], date); }}
                         className="w-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 text-xs font-bold px-2 py-1 rounded shadow-sm hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors text-center z-50 relative pointer-events-auto"
                         style={{ marginTop: '2px' }}
                     >
@@ -614,15 +640,41 @@ const App: React.FC = () => {
     }, []);
 
     if (authLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
-                Caricamento...
-            </div>
-        );
+        return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">Caricamento...</div>;
     }
 
+    // AUTH FLOW RENDERING
     if (!user) {
         return <LoginScreen />;
+    }
+
+    if (isAuthorized === false) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Accesso Google Negato</h2>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">
+                        L'account Google <span className="font-bold text-gray-900 dark:text-white">{user.email}</span> non è nella whitelist.
+                    </p>
+                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg mb-6 text-sm text-left">
+                        <p className="font-semibold mb-1">Nota:</p>
+                        <ul className="list-disc list-inside text-gray-500 dark:text-gray-400 space-y-1">
+                            <li>Se sei un amministratore, usa l'accesso con Email e Password.</li>
+                            <li>Se devi usare Google, chiedi di essere aggiunto alla whitelist.</li>
+                        </ul>
+                    </div>
+                    <button 
+                        onClick={handleLogout}
+                        className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg"
+                    >
+                        Esci e cambia account
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -688,7 +740,6 @@ const App: React.FC = () => {
                         messages={calendarMessages}
                         formats={calendarFormats}
                         popup={false} 
-                        // RIMOSSO max={0} che causava la sparizione dei post nelle altre viste
                         onDrillDown={handleDrillDown}
                         onShowMore={handleShowMore} 
                         dayLayoutAlgorithm="no-overlap" 
@@ -702,7 +753,7 @@ const App: React.FC = () => {
                                 header: CustomWeekHeader
                             },
                             month: {
-                                dateHeader: CustomMonthDateHeader // Inseriamo qui il nostro bottone per il mese
+                                dateHeader: CustomMonthDateHeader
                             }
                         }}
                     />
