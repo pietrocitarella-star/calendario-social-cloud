@@ -65,13 +65,13 @@ const resolveColor = (color: string) => {
 
 // ... (Componenti grafici KPI, Donut, Progress) ...
 const KPICard: React.FC<{ title: string; value: number | string; colorClass?: string; icon?: React.ReactNode; subtext?: string }> = ({ title, value, colorClass = "text-gray-900 dark:text-white", icon, subtext }) => (
-    <div className="bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 flex items-center justify-between transition-transform hover:scale-105 h-full print:border-gray-300 print:shadow-none print:break-inside-avoid">
+    <div className="bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 flex items-center justify-between transition-transform hover:scale-105 h-full">
         <div>
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider print:text-black">{title}</p>
-            <p className={`text-2xl font-bold mt-1 ${colorClass} print:text-black`}>{value}</p>
-            {subtext && <p className="text-[10px] text-gray-400 mt-1 print:text-gray-600">{subtext}</p>}
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{title}</p>
+            <p className={`text-2xl font-bold mt-1 ${colorClass}`}>{value}</p>
+            {subtext && <p className="text-[10px] text-gray-400 mt-1">{subtext}</p>}
         </div>
-        {icon && <div className="opacity-80 flex-shrink-0 ml-2 print:text-black">{icon}</div>}
+        {icon && <div className="opacity-80 flex-shrink-0 ml-2">{icon}</div>}
     </div>
 );
 
@@ -87,7 +87,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
     const circumference = 2 * Math.PI * radius;
 
     return (
-        <div className="flex flex-col items-center justify-center gap-6 w-full print:break-inside-avoid">
+        <div className="flex flex-col items-center justify-center gap-6 w-full">
             <div className="relative w-40 h-40 flex-shrink-0">
                 <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="transform -rotate-90">
                     {data.map((item, index) => {
@@ -112,16 +112,16 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
                     })}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-700 dark:text-gray-200 pointer-events-none">
-                    <span className="text-2xl font-bold print:text-black">{total}</span>
-                    <span className="text-xs print:text-black">Post</span>
+                    <span className="text-2xl font-bold">{total}</span>
+                    <span className="text-xs">Post</span>
                 </div>
             </div>
             <div className="space-y-2 w-full max-w-xs">
                 {data.map((item, i) => (
                     <div key={i} className="flex items-center gap-2 text-sm">
                         <span className={`w-3 h-3 rounded-full flex-shrink-0 ${!item.color.startsWith('#') ? item.color : ''}`} style={{ backgroundColor: item.color.startsWith('#') ? item.color : undefined }}></span>
-                        <span className="text-gray-600 dark:text-gray-300 truncate flex-grow print:text-black">{item.label}</span>
-                        <span className="font-bold ml-auto text-gray-800 dark:text-white print:text-black">{Math.round((item.value / total) * 100)}%</span>
+                        <span className="text-gray-600 dark:text-gray-300 truncate flex-grow">{item.label}</span>
+                        <span className="font-bold ml-auto text-gray-800 dark:text-white">{Math.round((item.value / total) * 100)}%</span>
                     </div>
                 ))}
             </div>
@@ -133,17 +133,17 @@ const ProgressBarChart: React.FC<{ data: { label: string; value: number; color: 
     const max = Math.max(...data.map(d => d.value), 1);
     if (data.length === 0) return <div className="text-center text-gray-400 py-10">Nessun dato</div>;
     return (
-        <div className="space-y-4 mt-2 w-full print:break-inside-avoid">
+        <div className="space-y-4 mt-2 w-full">
             {data.map((item, index) => (
                 <div key={`${item.label}-${index}`} className="group">
                     <div className="flex justify-between text-sm mb-1">
-                        <span className="font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2 print:text-black">
+                        <span className="font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2">
                             <span className={`w-3 h-3 rounded-full ${!item.color.startsWith('#') ? item.color : ''}`} style={{ backgroundColor: item.color.startsWith('#') ? item.color : undefined }}></span>
                             <span className="capitalize">{item.label}</span>
                         </span>
-                        <span className="text-gray-500 dark:text-gray-400 font-mono print:text-black">{item.value}</span>
+                        <span className="text-gray-500 dark:text-gray-400 font-mono">{item.value}</span>
                     </div>
-                    <div className="w-full bg-gray-100 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden print:bg-gray-200">
+                    <div className="w-full bg-gray-100 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden">
                         <div 
                             className={`h-2.5 rounded-full transition-all duration-500 ease-out group-hover:opacity-90 ${!item.color.startsWith('#') ? item.color : ''}`}
                             style={{ width: `${(item.value / max) * 100}%`, backgroundColor: item.color.startsWith('#') ? item.color : undefined }}
@@ -171,8 +171,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     const [customStartDate, setCustomStartDate] = useState('');
     const [customEndDate, setCustomEndDate] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    
-    // NUOVO: Stato per l'anno di riferimento dei filtri mese/anno
     const [selectedYear, setSelectedYear] = useState(moment().year());
 
     const [chartPrefs, setChartPrefs] = useState({
@@ -182,7 +180,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         team: 'bar' as ChartType
     });
     
-    // Genera i nomi dei mesi
     const months = moment.monthsShort();
     
     const handleYearChange = (delta: number) => {
@@ -190,7 +187,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     };
 
     const handleMonthPreset = (monthIndex: number) => {
-        // Usa selectedYear invece dell'anno corrente
         const start = moment().year(selectedYear).month(monthIndex).startOf('month').format('YYYY-MM-DD');
         const end = moment().year(selectedYear).month(monthIndex).endOf('month').format('YYYY-MM-DD');
         setCustomStartDate(start);
@@ -199,7 +195,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     };
 
     const handleYearPreset = () => {
-        // Usa selectedYear invece dell'anno corrente
         const start = moment().year(selectedYear).startOf('year').format('YYYY-MM-DD');
         const end = moment().year(selectedYear).endOf('year').format('YYYY-MM-DD');
         setCustomStartDate(start);
@@ -251,17 +246,14 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         const scheduled = filteredPosts.filter(p => p.status === PostStatus.Scheduled).length;
         const drafts = filteredPosts.filter(p => p.status === PostStatus.Draft).length;
 
-        // --- NEW KPI LOGIC ---
-        // Conta i post pubblicati ESCLUDENDO: Telegram, WhatsApp e Collaborazioni
         const netPublished = filteredPosts.filter(p => {
             if (p.status !== PostStatus.Published) return false;
             
             const isExcludedChannel = p.social === 'Telegram' || p.social === 'WhatsApp';
-            const isExcludedType = p.postType === PostType.Collaboration; // 'collaborazione'
+            const isExcludedType = p.postType === PostType.Collaboration; 
             
             return !isExcludedChannel && !isExcludedType;
         }).length;
-        // ---------------------
 
         const postsByChannel = channels.map(channel => ({
             label: channel.name,
@@ -286,8 +278,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
             { label: 'Altri', value: totalPosts - published - scheduled - drafts - filteredPosts.filter(p => p.status === PostStatus.NeedsApproval).length, color: 'bg-gray-400' },
         ].filter(d => d.value > 0);
 
-        // --- TEAM STATS LOGIC ---
-        // Filtriamo solo i post PUBBLICATI che hanno un assegnatario
         const teamPublishedCounts: Record<string, number> = {};
         filteredPosts.filter(p => p.status === PostStatus.Published && p.assignedTo).forEach(p => {
             if (p.assignedTo) {
@@ -307,10 +297,73 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         return { totalPosts, published, scheduled, drafts, netPublished, postsByChannel, postsByType, statusData, teamStats };
     }, [filteredPosts, channels, teamMembers]);
 
-    const handlePrint = () => window.print();
+    // NUOVA FUNZIONE DI STAMPA: Crea un iframe pulito e stampa quello
+    const handlePrint = () => {
+        const content = document.getElementById('reports-modal-content-body');
+        if (!content) return;
+
+        // Crea un iframe invisibile
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        document.body.appendChild(iframe);
+
+        const doc = iframe.contentWindow?.document;
+        if (doc) {
+            doc.open();
+            doc.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Report Analitico</title>
+                    <script src="https://cdn.tailwindcss.com"></script>
+                    <style>
+                        body { 
+                            background-color: white !important; 
+                            -webkit-print-color-adjust: exact; 
+                            print-color-adjust: exact;
+                            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                            padding: 20px;
+                        }
+                        .no-print { display: none !important; }
+                        h2, h3, p, span, div { color: black !important; }
+                    </style>
+                </head>
+                <body>
+                    <div class="mb-6 border-b pb-4">
+                        <h1 class="text-3xl font-bold">Report Analitico</h1>
+                        <p class="text-gray-600">
+                            Generato il ${moment().format('DD/MM/YYYY HH:mm')}
+                            <br/>
+                            Periodo: ${timeRange === 'CUSTOM' ? `${moment(customStartDate).format('DD/MM/YY')} - ${moment(customEndDate).format('DD/MM/YY')}` : RANGE_LABELS[timeRange]}
+                        </p>
+                    </div>
+                    <div id="print-body">
+                        ${content.innerHTML}
+                    </div>
+                    <script>
+                        // Attendi che Tailwind venga caricato
+                        window.onload = function() {
+                            // Piccola attesa per essere sicuri che il rendering sia finito
+                            setTimeout(function() {
+                                window.print();
+                                // Rimuovi l'iframe dopo la stampa (opzionale, ma pulito)
+                                // window.parent.document.body.removeChild(window.frameElement); 
+                            }, 500);
+                        }
+                    </script>
+                </body>
+                </html>
+            `);
+            doc.close();
+        }
+    };
 
     const handleExportCSV = () => {
-        // Logica migliorata per la stringa del periodo
         let dateRangeLabel = '';
         const now = moment();
         
@@ -321,7 +374,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         } else if (timeRange === 'ALL') {
              dateRangeLabel = 'Tutto lo storico';
         } else {
-             // Presets come 1M, 3M...
              const rangeMap: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1A': 12 };
              if (rangeMap[timeRange]) {
                  const start = now.clone().subtract(rangeMap[timeRange], 'months').format('DD/MM/YYYY');
@@ -335,7 +387,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         const rows = [
             ['REPORT ANALITICO CALENDARIO EDITORIALE'],
             ['Data Generazione', moment().format('DD/MM/YYYY HH:mm')],
-            ['Periodo Analizzato', dateRangeLabel], // Usa la nuova label dettagliata
+            ['Periodo Analizzato', dateRangeLabel],
             ['Filtro Ricerca', searchTerm || 'Nessuno'],
             [],
             ['KPI GENERALI'],
@@ -371,90 +423,17 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     if (!isOpen) return null;
     
     return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4 print:p-0 print:bg-white print:static print:inset-auto print:flex print:items-start print:justify-start">
-            <style>{`
-                @media print {
-                    @page { 
-                        size: A4 portrait; 
-                        margin: 1cm; 
-                    }
-
-                    /* NASCONDI TUTTO IL RESTO */
-                    body > *:not(#reports-root-container) {
-                        display: none !important;
-                    }
-
-                    /* RESETTA CONTAINER PRINCIPALE */
-                    body, html, #root {
-                        width: 100%;
-                        height: auto;
-                        overflow: visible;
-                        background: white;
-                    }
-
-                    /* MOSTRA MODALE COME DOCUMENTO */
-                    #reports-root-container {
-                        position: absolute;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: auto;
-                        z-index: 9999;
-                        background: white;
-                        display: block !important;
-                    }
-
-                    /* STILI SPECIFICI MODALE */
-                    .bg-white, .dark\\:bg-gray-800, .bg-gray-50 {
-                        background-color: white !important;
-                        color: black !important;
-                    }
-                    
-                    /* FORZA COLORI NERI */
-                    h1, h2, h3, h4, p, span, div {
-                        color: black !important;
-                    }
-
-                    /* RESET LAYOUT GRIGLIA */
-                    .print\\:grid-cols-4 {
-                        display: grid !important;
-                        grid-template-columns: repeat(4, 1fr) !important;
-                        gap: 10px;
-                    }
-                    .print\\:grid-cols-2 {
-                        display: grid !important;
-                        grid-template-columns: repeat(2, 1fr) !important;
-                        gap: 10px;
-                    }
-
-                    /* EVITA ROTTURE DI PAGINA DENTRO I GRAFICI */
-                    .print\\:break-inside-avoid {
-                        break-inside: avoid;
-                        page-break-inside: avoid;
-                    }
-
-                    /* NASCONDI BOTTONI */
-                    button, .no-print {
-                        display: none !important;
-                    }
-                    
-                    /* RESET SCROLL */
-                    .overflow-y-auto {
-                        overflow: visible !important;
-                        height: auto !important;
-                    }
-                }
-            `}</style>
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4">
             
-            <div id="reports-root-container" className="w-full h-full flex items-center justify-center print:block print:w-full print:h-auto">
-                <div className="bg-gray-50 dark:bg-gray-800 w-full max-w-7xl rounded-2xl shadow-2xl flex flex-col max-h-[95vh] print:shadow-none print:max-h-none print:rounded-none">
+            <div className="w-full h-full flex items-center justify-center">
+                <div className="bg-gray-50 dark:bg-gray-800 w-full max-w-7xl rounded-2xl shadow-2xl flex flex-col max-h-[95vh]">
                     
                     {/* Header */}
-                    <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl shadow-sm print:static print:border-b-2 print:border-black print:shadow-none">
+                    <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl shadow-sm">
                         <div className="flex justify-between items-center p-4">
                             <div>
-                                <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white print:text-black">Report Analitico</h2>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block print:block print:text-gray-600">
+                                <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Report Analitico</h2>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
                                     Analisi dettagliata performance
                                 </p>
                             </div>
@@ -465,7 +444,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             </div>
                         </div>
 
-                        {/* Filters Panel - Nascosto in stampa */}
+                        {/* Filters Panel */}
                         <div className="px-4 pb-4 flex flex-col xl:flex-row gap-4 justify-between items-start bg-gray-50/50 dark:bg-gray-800/50 no-print border-t border-gray-100 dark:border-gray-700 pt-3">
                             {/* ... filters content ... */}
                             <div className="w-full xl:w-64">
@@ -515,17 +494,17 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                         </div>
                     </div>
 
-                    {/* Body */}
-                    <div className="p-6 overflow-y-auto flex-grow space-y-6 print:overflow-visible bg-gray-50 dark:bg-gray-900/50 print:bg-white">
+                    {/* Body (ID usato per la stampa) */}
+                    <div id="reports-modal-content-body" className="p-6 overflow-y-auto flex-grow space-y-6 bg-gray-50 dark:bg-gray-900/50">
                         
-                        <div className="flex items-center justify-between print:mb-4">
-                             <p className="text-sm font-medium text-gray-500 dark:text-gray-400 print:text-black">
-                                Risultati: <span className="text-gray-900 dark:text-white font-bold print:text-black">{filteredPosts.length}</span> post nel periodo <span className="text-gray-900 dark:text-white font-bold print:text-black">{timeRange === 'CUSTOM' ? `${moment(customStartDate).format('DD/MM/YY')} - ${moment(customEndDate).format('DD/MM/YY')}` : RANGE_LABELS[timeRange]}</span>
+                        <div className="flex items-center justify-between no-print">
+                             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                Risultati: <span className="text-gray-900 dark:text-white font-bold">{filteredPosts.length}</span> post nel periodo <span className="text-gray-900 dark:text-white font-bold">{timeRange === 'CUSTOM' ? `${moment(customStartDate).format('DD/MM/YY')} - ${moment(customEndDate).format('DD/MM/YY')}` : RANGE_LABELS[timeRange]}</span>
                             </p>
                         </div>
 
                         {/* KPI Row 1: Generale */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <KPICard title="Totale" value={stats.totalPosts} icon={<span className="text-2xl">📝</span>} />
                             <KPICard title="Pubblicati (Tutti)" value={stats.published} colorClass="text-green-600 dark:text-green-400" icon={<span className="text-2xl">✅</span>} />
                             <KPICard title="Programmati" value={stats.scheduled} colorClass="text-blue-600 dark:text-blue-400" icon={<span className="text-2xl">📅</span>} />
@@ -533,7 +512,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                         </div>
 
                         {/* KPI Row 2: Specifiche e Nette */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <KPICard 
                                 title="Post Pubblicati (Netto)" 
                                 value={stats.netPublished} 
@@ -541,16 +520,16 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                                 icon={<span className="text-2xl">🎯</span>}
                                 subtext="Esclusi: Telegram, WhatsApp, Collaborazioni"
                             />
-                            {/* Placeholder in UI, hidden in print if empty */}
-                            <div className="hidden md:block print:hidden"></div> 
+                            {/* Placeholder */}
+                            <div className="hidden md:block"></div> 
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 print:grid-cols-2 print:block">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
                             
                             {/* Status Distribution */}
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col print:border-gray-300 print:mb-4 print:break-inside-avoid">
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white print:text-black">Stato Contenuti</h3>
+                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white">Stato Contenuti</h3>
                                     <ChartToggle current={chartPrefs.status} onChange={(t) => setChartPrefs(prev => ({...prev, status: t}))} />
                                 </div>
                                 <div className="flex-grow flex items-center justify-center min-h-[200px]">
@@ -562,9 +541,9 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             </div>
 
                             {/* Channel Performance */}
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 print:border-gray-300 print:mb-4 print:break-inside-avoid">
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white print:text-black">Top Canali</h3>
+                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white">Top Canali</h3>
                                     <ChartToggle current={chartPrefs.channel} onChange={(t) => setChartPrefs(prev => ({...prev, channel: t}))} />
                                 </div>
                                 <div className="flex-grow flex items-center justify-center min-h-[200px]">
@@ -576,9 +555,9 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             </div>
 
                             {/* Type Performance */}
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 print:border-gray-300 print:mb-4 print:break-inside-avoid">
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white print:text-black">Tipologia</h3>
+                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white">Tipologia</h3>
                                     <ChartToggle current={chartPrefs.type} onChange={(t) => setChartPrefs(prev => ({...prev, type: t}))} />
                                 </div>
                                 <div className="flex-grow flex items-center justify-center min-h-[200px]">
@@ -590,14 +569,14 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             </div>
 
                              {/* Team Performance */}
-                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 print:border-gray-300 print:mb-4 print:break-inside-avoid">
+                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white print:text-black">Performance Team</h3>
+                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white">Performance Team</h3>
                                     <ChartToggle current={chartPrefs.team} onChange={(t) => setChartPrefs(prev => ({...prev, team: t}))} />
                                 </div>
                                 <div className="flex-grow flex items-center justify-center min-h-[200px]">
                                     {stats.teamStats.length === 0 ? (
-                                        <p className="text-sm text-gray-400 text-center print:text-gray-600">Nessun post pubblicato assegnato nel periodo.</p>
+                                        <p className="text-sm text-gray-400 text-center">Nessun post pubblicato assegnato nel periodo.</p>
                                     ) : (
                                         chartPrefs.team === 'donut' 
                                             ? <DonutChart data={stats.teamStats} />

@@ -620,6 +620,7 @@ const App: React.FC = () => {
     const CustomWeekHeader: React.FC<HeaderProps> = ({ date, localizer }) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
+        // Usa isPostVisible per garantire che il conteggio rispetti i filtri
         const count = posts.filter(p => 
             moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
         ).length;
@@ -638,6 +639,7 @@ const App: React.FC = () => {
     const CustomMonthDateHeader: React.FC<DateHeaderProps> = ({ date, label }) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
+        // Usa isPostVisible per garantire che il conteggio rispetti i filtri
         const count = posts.filter(p => 
             moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
         ).length;
