@@ -350,12 +350,30 @@ const App: React.FC = () => {
         setIsPostModalOpen(true);
     }, [posts]);
 
+    // HELPERS PER IL FILTRAGGIO NEL CALENDARIO (Headers e Modale Giorno)
+    const isPostVisible = useCallback((post: Post) => {
+        // 1. Filtro Canali
+        if (activeChannelFilters.length > 0 && !activeChannelFilters.includes(post.social)) {
+            return false;
+        }
+        // 2. Filtro Ricerca
+        if (searchTerm.trim()) {
+            const lowerTerm = searchTerm.toLowerCase();
+            const matchesSearch = 
+                post.title.toLowerCase().includes(lowerTerm) || 
+                (post.notes && post.notes.toLowerCase().includes(lowerTerm));
+            if (!matchesSearch) return false;
+        }
+        return true;
+    }, [activeChannelFilters, searchTerm]);
+
     const handleShowMore = useCallback((events: CalendarEvent[], date: Date) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
         
+        // Filtra i post usando la stessa logica del calendario principale
         const postsForDay = posts.filter(p => 
-            moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]')
+            moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
         );
 
         setDayModalData({
@@ -363,7 +381,7 @@ const App: React.FC = () => {
             date: date,
             posts: postsForDay
         });
-    }, [posts]);
+    }, [posts, isPostVisible]);
 
     const closePostModal = useCallback(() => {
         setIsPostModalOpen(false);
@@ -598,10 +616,13 @@ const App: React.FC = () => {
         );
     };
     
+    // CUSTOM WEEK HEADER AGGIORNATO: Conta solo i post filtrati
     const CustomWeekHeader: React.FC<HeaderProps> = ({ date, localizer }) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
-        const count = posts.filter(p => moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]')).length;
+        const count = posts.filter(p => 
+            moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
+        ).length;
 
         return (
             <div className="flex flex-col items-center justify-center py-1 w-full">
@@ -613,10 +634,13 @@ const App: React.FC = () => {
         );
     };
     
+    // CUSTOM MONTH DATE HEADER AGGIORNATO: Conta solo i post filtrati
     const CustomMonthDateHeader: React.FC<DateHeaderProps> = ({ date, label }) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
-        const count = posts.filter(p => moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]')).length;
+        const count = posts.filter(p => 
+            moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
+        ).length;
 
         return (
             <div className="flex flex-col items-start p-1 w-full relative" style={{ minHeight: '30px' }}>

@@ -173,7 +173,8 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
         ...postDataWithoutId,
         // MODIFICA: "(Copia)" viene messo all'inizio del titolo
         title: `(Copia) ${formData.title}`,
-        status: PostStatus.Draft, // Resetta lo stato a bozza per sicurezza
+        // MODIFICA RICHIESTA: Manteniamo lo stato originale invece di resettarlo a Draft
+        status: formData.status, 
         history: [] // La copia non eredita la storia
     };
     setFormData(duplicatedPost);
