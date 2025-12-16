@@ -20,7 +20,7 @@ import {
     deleteTeamMemberFromDb
 } from './services/firestoreService';
 import { STATUS_COLORS, ALLOWED_EMAILS } from './constants';
-import { exportPostsToJson, exportPostsToCsv } from './utils/fileHandlers';
+import { exportPostsToJson, exportPostsToCsv, parseCsvToPosts } from './utils/fileHandlers';
 import PostModal from './components/PostModal';
 import CalendarHeader from './components/CalendarHeader';
 import CustomToolbar from './components/CustomToolbar';
@@ -122,6 +122,7 @@ const App: React.FC = () => {
     });
 
     const [importPreview, setImportPreview] = useState<{
+        type: 'json' | 'csv'; // Distinguiamo il tipo di import
         total: number;
         valid: number;
         invalid: number;
@@ -427,9 +428,9 @@ const App: React.FC = () => {
     const handleImportFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const inputElement = event.target;
         const file = inputElement.files?.[0];
-
         if (!file) return;
 
+        const isCsv = file.name.toLowerCase().endsWith('.csv');
         const reader = new FileReader();
 
         reader.onload = (e) => {
@@ -437,46 +438,64 @@ const App: React.FC = () => {
             if (typeof content !== 'string') return;
 
             try {
-                let importedData;
-                try {
-                    importedData = JSON.parse(content);
-                } catch (jsonError) {
-                    alert("Il file selezionato non contiene un JSON valido.");
-                    return;
-                }
-                
-                if (!Array.isArray(importedData)) {
-                    alert("La struttura del file non è corretta (non è una lista).");
-                    return;
-                }
-
+                let sanitizedPosts: Post[] = [];
                 let validCount = 0;
                 let invalidCount = 0;
-                const sanitizedPosts: Post[] = [];
+                let totalRecords = 0;
 
-                importedData.forEach((item: any) => {
-                    if (item && typeof item === 'object') {
-                        const dateIsValid = item.date && moment(item.date).isValid();
-                        
-                        const newPost: Post = {
-                            id: item.id || '', 
-                            title: item.title || '(Importato senza titolo)',
-                            date: dateIsValid ? moment(item.date).format('YYYY-MM-DDTHH:mm') : moment().format('YYYY-MM-DDTHH:mm'),
-                            social: item.social || (socialChannels.length > 0 ? socialChannels[0].name : 'Generico'),
-                            status: Object.values(PostStatus).includes(item.status) ? item.status : PostStatus.Draft,
-                            postType: Object.values(PostType).includes(item.postType) ? item.postType : PostType.Post,
-                            externalLink: item.externalLink || '',
-                            creativityLink: item.creativityLink || '',
-                            notes: item.notes || '',
-                            history: item.history || [],
-                            assignedTo: item.assignedTo || undefined
-                        };
-                        sanitizedPosts.push(newPost);
-                        validCount++;
-                    } else {
-                        invalidCount++;
+                if (isCsv) {
+                    // --- CSV LOGIC ---
+                    // Passiamo i teamMembers per risolvere i nomi in ID
+                    const parsed = parseCsvToPosts(content, teamMembers);
+                    totalRecords = parsed.length;
+                    
+                    // Rimuoviamo gli ID per forzare la creazione di nuovi record (APPEND)
+                    sanitizedPosts = parsed.map(p => {
+                        const { id, ...rest } = p;
+                        return rest as Post;
+                    });
+                    validCount = sanitizedPosts.length;
+                } else {
+                    // --- JSON LOGIC ---
+                    let importedData;
+                    try {
+                        importedData = JSON.parse(content);
+                    } catch (jsonError) {
+                        alert("Il file selezionato non contiene un JSON valido.");
+                        return;
                     }
-                });
+                    
+                    if (!Array.isArray(importedData)) {
+                        alert("La struttura del file non è corretta (non è una lista).");
+                        return;
+                    }
+
+                    totalRecords = importedData.length;
+
+                    importedData.forEach((item: any) => {
+                        if (item && typeof item === 'object') {
+                            const dateIsValid = item.date && moment(item.date).isValid();
+                            
+                            const newPost: Post = {
+                                id: item.id || '', // Mantieni ID per overwrite se esiste
+                                title: item.title || '(Importato senza titolo)',
+                                date: dateIsValid ? moment(item.date).format('YYYY-MM-DDTHH:mm') : moment().format('YYYY-MM-DDTHH:mm'),
+                                social: item.social || (socialChannels.length > 0 ? socialChannels[0].name : 'Generico'),
+                                status: Object.values(PostStatus).includes(item.status) ? item.status : PostStatus.Draft,
+                                postType: Object.values(PostType).includes(item.postType) ? item.postType : PostType.Post,
+                                externalLink: item.externalLink || '',
+                                creativityLink: item.creativityLink || '',
+                                notes: item.notes || '',
+                                history: item.history || [],
+                                assignedTo: item.assignedTo || undefined
+                            };
+                            sanitizedPosts.push(newPost);
+                            validCount++;
+                        } else {
+                            invalidCount++;
+                        }
+                    });
+                }
 
                 if (validCount === 0) {
                     alert("Il file non contiene nessun post valido da importare.");
@@ -484,7 +503,8 @@ const App: React.FC = () => {
                 }
 
                 setImportPreview({
-                    total: importedData.length,
+                    type: isCsv ? 'csv' : 'json',
+                    total: totalRecords,
                     valid: validCount,
                     invalid: invalidCount,
                     data: sanitizedPosts
@@ -494,19 +514,21 @@ const App: React.FC = () => {
                 console.error("Errore generico importazione:", error);
                 alert("Si è verificato un errore imprevisto durante la lettura del file.");
             } finally {
-                if (fileInputRef.current) {
-                    fileInputRef.current.value = '';
-                }
+                // Reset del valore dell'input per permettere di riselezionare lo stesso file
+                if (event.target) event.target.value = '';
             }
         };
 
         reader.readAsText(file);
-    }, [socialChannels]);
+    }, [socialChannels, teamMembers]); // Aggiunto teamMembers alle dipendenze
 
     const confirmImport = async () => {
         if (importPreview && importPreview.data) {
             await savePostsToStorage(importPreview.data);
             setImportPreview(null);
+            if (importPreview.type === 'csv') {
+                alert(`Importazione completata! ${importPreview.valid} post sono stati aggiunti al calendario.`);
+            }
         }
     };
 
@@ -853,12 +875,19 @@ const App: React.FC = () => {
             {importPreview && (
                 <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-md">
-                        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mb-4 mx-auto">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-4 mx-auto ${importPreview.type === 'csv' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
+                             {importPreview.type === 'csv' 
+                                ? <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                : <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                             }
                         </div>
-                        <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-2">Conferma Importazione</h3>
+                        <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-2">
+                            {importPreview.type === 'csv' ? 'Conferma Importazione CSV' : 'Conferma Ripristino Backup'}
+                        </h3>
                         <p className="text-center text-gray-500 dark:text-gray-400 mb-6 text-sm">
-                            Hai selezionato un file di backup. Ecco cosa contiene:
+                            {importPreview.type === 'csv' 
+                                ? 'Hai selezionato un file CSV. Ecco i post che verranno aggiunti:' 
+                                : 'Hai selezionato un backup JSON. Ecco cosa contiene:'}
                         </p>
                         
                         <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6 space-y-2">
@@ -872,8 +901,11 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg text-sm text-red-800 dark:text-red-200 mb-6">
-                            ⚠️ <strong>ATTENZIONE:</strong> Procedendo, cancellerai tutti i dati presenti nel cloud e li sostituirai con questo file.
+                        <div className={`p-3 border rounded-lg text-sm mb-6 ${importPreview.type === 'csv' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-800 dark:text-blue-200' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700 text-red-800 dark:text-red-200'}`}>
+                             {importPreview.type === 'csv' 
+                                ? <span>ℹ️ <strong>NOTA:</strong> Questi post verranno <strong>aggiunti</strong> a quelli esistenti. Nessun dato verrà cancellato.</span>
+                                : <span>⚠️ <strong>ATTENZIONE:</strong> Procedendo, cancellerai tutti i dati presenti nel cloud e li sostituirai con questo backup.</span>
+                             }
                         </div>
 
                         <div className="flex gap-3">
@@ -885,9 +917,9 @@ const App: React.FC = () => {
                             </button>
                             <button 
                                 onClick={confirmImport}
-                                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold transition-colors shadow-lg"
+                                className={`flex-1 px-4 py-2 rounded-lg text-white font-semibold transition-colors shadow-lg ${importPreview.type === 'csv' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                             >
-                                Sovrascrivi Dati
+                                {importPreview.type === 'csv' ? 'Aggiungi Post' : 'Sovrascrivi Dati'}
                             </button>
                         </div>
                     </div>

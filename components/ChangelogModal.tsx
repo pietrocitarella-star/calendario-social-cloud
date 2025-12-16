@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 
 interface ChangeLogEntry {
@@ -9,6 +8,16 @@ interface ChangeLogEntry {
 }
 
 const changelogData: ChangeLogEntry[] = [
+    {
+        version: '1.9.6',
+        date: '09/11/2025',
+        changes: [
+            'Nuova Importazione CSV: Ora puoi caricare post massivamente da file Excel/CSV. I post vengono aggiunti al calendario senza cancellare quelli esistenti.',
+            'Fix Stampa Report: Risolto il problema della pagina bianca. La stampa ora genera un layout pulito e ottimizzato.',
+            'Miglioramento Duplicazione: Quando duplichi un post, ora mantiene lo stato originale (es. Pubblicato) invece di tornare in Bozze.',
+            'Fix Contatori Mese: I numeri "X Post" nella vista mensile ora rispettano correttamente i filtri attivi (Canali e Ricerca).'
+        ]
+    },
     {
         version: '1.9.5',
         date: '08/11/2025',

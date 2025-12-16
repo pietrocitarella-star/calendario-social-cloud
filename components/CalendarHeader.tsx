@@ -42,6 +42,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   // Close notifications when clicking outside
   useEffect(() => {
@@ -55,6 +56,10 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
         document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  const handleCsvClick = () => {
+      csvInputRef.current?.click();
+  };
 
   return (
     <div className="flex flex-col gap-4 mb-4">
@@ -70,7 +75,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 text-xs font-mono rounded-full transition-colors"
                         title="Vedi cronologia versioni"
                     >
-                        v1.9.5
+                        v1.9.6
                     </button>
                 )}
             </div>
@@ -166,15 +171,27 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
 
                 <div className="flex gap-2">
                     <input type="file" accept=".json" ref={fileInputRef} onChange={onImport} className="hidden" />
-                    
-                    {/* Pulsante Importa */}
+                    {/* Input CSV separato ma gestito dallo stesso handler con logica diversa, o handler separato */}
+                    <input type="file" accept=".csv" ref={csvInputRef} onChange={onImport} className="hidden" />
+
+                    {/* Pulsante Importa JSON */}
                     <button 
                         onClick={() => fileInputRef?.current?.click()} 
                         className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors shadow-sm"
-                        title="Importa Backup"
+                        title="Ripristina Backup JSON (Sovrascrive)"
                     >
                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                        Importa
+                        Backup
+                    </button>
+
+                    {/* Pulsante Importa CSV */}
+                    <button 
+                        onClick={handleCsvClick} 
+                        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                        title="Importa Post da CSV (Aggiunge)"
+                    >
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        Importa CSV
                     </button>
 
                     {/* Pulsante JSON */}
