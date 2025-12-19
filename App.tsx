@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, Suspense, lazy } from 'react';
 import { Calendar, momentLocalizer, Views, EventProps, ToolbarProps, Formats, HeaderProps, DateHeaderProps } from 'react-big-calendar';
 import moment from 'moment';
 import 'moment/locale/it'; 
@@ -21,18 +21,21 @@ import {
 } from './services/firestoreService';
 import { STATUS_COLORS, ALLOWED_EMAILS } from './constants';
 import { exportPostsToJson, exportPostsToCsv, parseCsvToPosts } from './utils/fileHandlers';
-import PostModal from './components/PostModal';
 import CalendarHeader from './components/CalendarHeader';
 import CustomToolbar from './components/CustomToolbar';
-import ReportsModal from './components/ReportsModal';
-import SocialChannelsModal from './components/SocialChannelsModal';
-import TeamMembersModal from './components/TeamMembersModal';
 import StatusLegend from './components/StatusLegend';
-import ChangelogModal from './components/ChangelogModal';
 import LoginScreen from './components/LoginScreen';
-import DayDetailsModal from './components/DayDetailsModal'; 
 import { auth } from './firebaseConfig';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+
+// --- LAZY LOADING DEI COMPONENTI PESANTI ---
+// Vengono caricati solo quando richiesti, riducendo il bundle iniziale
+const PostModal = lazy(() => import('./components/PostModal'));
+const ReportsModal = lazy(() => import('./components/ReportsModal'));
+const SocialChannelsModal = lazy(() => import('./components/SocialChannelsModal'));
+const TeamMembersModal = lazy(() => import('./components/TeamMembersModal'));
+const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
+const DayDetailsModal = lazy(() => import('./components/DayDetailsModal'));
 
 // Configurazione rigorosa di moment.js per l'italiano
 moment.locale('it');
@@ -96,7 +99,7 @@ const App: React.FC = () => {
     const [reportPosts, setReportPosts] = useState<Post[]>([]); 
     const [isLoadingReportData, setIsLoadingReportData] = useState(false);
 
-    const [events, setEvents] = useState<CalendarEvent[]>([]);
+    // const [events, setEvents] = useState<CalendarEvent[]>([]); // RIMOSSO: Stato ridondante
     const [socialChannels, setSocialChannels] = useState<SocialChannel[]>([]);
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     
@@ -232,9 +235,11 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, [user, isAuthorized]);
 
-    useEffect(() => {
-        setEvents(mapPostsToEvents(posts));
-    }, [posts]);
+    // OTTIMIZZAZIONE RENDERING:
+    // Invece di usare useEffect + setEvents (che causa un re-render extra),
+    // calcoliamo gli eventi direttamente con useMemo.
+    // L'array 'events' sarà ricalcolato solo se 'posts' cambia.
+    const events = useMemo(() => mapPostsToEvents(posts), [posts]);
 
     // ---- HANDLERS ----
     
@@ -519,7 +524,15 @@ const App: React.FC = () => {
             }
         };
 
-        reader.readAsText(file);
+        if (isCsv) {
+            // FIX ENCODING: Usiamo Windows-1252 (ANSI) per i CSV perché Excel salva così di default
+            // Questo risolve il problema delle lettere accentate che appaiono come simboli strani ()
+            reader.readAsText(file, 'windows-1252');
+        } else {
+            // Per JSON usiamo UTF-8 standard
+            reader.readAsText(file);
+        }
+        
     }, [socialChannels, teamMembers]); // Aggiunto teamMembers alle dipendenze
 
     const confirmImport = async () => {
@@ -661,10 +674,14 @@ const App: React.FC = () => {
     const CustomMonthDateHeader: React.FC<DateHeaderProps> = ({ date, label }) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
-        // Usa isPostVisible per garantire che il conteggio rispetti i filtri
-        const count = posts.filter(p => 
+        
+        // Filtra i post del giorno corrente
+        const postsForDay = posts.filter(p => 
             moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
-        ).length;
+        );
+        
+        const count = postsForDay.length;
+        // Rimosso il calcolo di publishedCount che non serve più
 
         return (
             <div className="flex flex-col items-start p-1 w-full relative" style={{ minHeight: '30px' }}>
@@ -808,69 +825,72 @@ const App: React.FC = () => {
                 </div>
             </div>
 
-            {isPostModalOpen && selectedEvent && (
-                <PostModal
-                    isOpen={isPostModalOpen}
-                    post={selectedEvent}
-                    socialChannels={socialChannels}
-                    teamMembers={teamMembers}
-                    onClose={closePostModal}
-                    onSave={handleSavePost}
-                    onDelete={handleDeletePost}
-                />
-            )}
-            
-            {isReportsModalOpen && (
-                <ReportsModal
-                    isOpen={isReportsModalOpen}
-                    onClose={() => setIsReportsModalOpen(false)}
-                    posts={reportPosts} 
-                    channels={socialChannels}
-                    teamMembers={teamMembers} 
-                />
-            )}
-            
-            {isChannelsModalOpen && (
-                <SocialChannelsModal
-                    isOpen={isChannelsModalOpen}
-                    onClose={() => setIsChannelsModalOpen(false)}
-                    channels={socialChannels}
-                    posts={posts}
-                    onSave={handleSaveChannels}
-                />
-            )}
+            {/* --- WRAPPING MODALS IN SUSPENSE PER LAZY LOADING --- */}
+            <Suspense fallback={null}>
+                {isPostModalOpen && selectedEvent && (
+                    <PostModal
+                        isOpen={isPostModalOpen}
+                        post={selectedEvent}
+                        socialChannels={socialChannels}
+                        teamMembers={teamMembers}
+                        onClose={closePostModal}
+                        onSave={handleSavePost}
+                        onDelete={handleDeletePost}
+                    />
+                )}
+                
+                {isReportsModalOpen && (
+                    <ReportsModal
+                        isOpen={isReportsModalOpen}
+                        onClose={() => setIsReportsModalOpen(false)}
+                        posts={reportPosts} 
+                        channels={socialChannels}
+                        teamMembers={teamMembers} 
+                    />
+                )}
+                
+                {isChannelsModalOpen && (
+                    <SocialChannelsModal
+                        isOpen={isChannelsModalOpen}
+                        onClose={() => setIsChannelsModalOpen(false)}
+                        channels={socialChannels}
+                        posts={posts}
+                        onSave={handleSaveChannels}
+                    />
+                )}
 
-            {isTeamModalOpen && (
-                <TeamMembersModal
-                    isOpen={isTeamModalOpen}
-                    onClose={() => setIsTeamModalOpen(false)}
-                    teamMembers={teamMembers}
-                    posts={posts}
-                    onSave={handleSaveTeam}
-                />
-            )}
+                {isTeamModalOpen && (
+                    <TeamMembersModal
+                        isOpen={isTeamModalOpen}
+                        onClose={() => setIsTeamModalOpen(false)}
+                        teamMembers={teamMembers}
+                        posts={posts}
+                        onSave={handleSaveTeam}
+                    />
+                )}
 
-            {isChangelogModalOpen && (
-                <ChangelogModal 
-                    isOpen={isChangelogModalOpen}
-                    onClose={() => setIsChangelogModalOpen(false)}
-                />
-            )}
-            
-            {dayModalData.isOpen && (
-                <DayDetailsModal
-                    isOpen={dayModalData.isOpen}
-                    onClose={() => setDayModalData(prev => ({ ...prev, isOpen: false }))}
-                    date={dayModalData.date}
-                    posts={dayModalData.posts}
-                    teamMembers={teamMembers}
-                    channels={socialChannels}
-                    onEditPost={(post) => {
-                        setSelectedEvent(post);
-                        setIsPostModalOpen(true);
-                    }}
-                />
-            )}
+                {isChangelogModalOpen && (
+                    <ChangelogModal 
+                        isOpen={isChangelogModalOpen}
+                        onClose={() => setIsChangelogModalOpen(false)}
+                    />
+                )}
+                
+                {dayModalData.isOpen && (
+                    <DayDetailsModal
+                        isOpen={dayModalData.isOpen}
+                        onClose={() => setDayModalData(prev => ({ ...prev, isOpen: false }))}
+                        date={dayModalData.date}
+                        posts={dayModalData.posts}
+                        teamMembers={teamMembers}
+                        channels={socialChannels}
+                        onEditPost={(post) => {
+                            setSelectedEvent(post);
+                            setIsPostModalOpen(true);
+                        }}
+                    />
+                )}
+            </Suspense>
 
             {importPreview && (
                 <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex items-center justify-center p-4">

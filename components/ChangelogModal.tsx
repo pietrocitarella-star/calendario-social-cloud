@@ -9,6 +9,15 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '1.9.7',
+        date: '09/11/2025',
+        changes: [
+            'Nuovo stato "Cancellato": Aggiunta la possibilità di marcare i post come cancellati (colore grigio scuro).',
+            'Ordinamento Stati: I menu a tendina e la legenda ora mostrano gli stati in rigoroso ordine alfabetico.',
+            'Vista Mese Arricchita: Nel calendario mensile, oltre al totale dei post del giorno, viene mostrato anche quanti sono stati Pubblicati (es. "5 Post (2 Pub)").'
+        ]
+    },
+    {
         version: '1.9.6',
         date: '09/11/2025',
         changes: [

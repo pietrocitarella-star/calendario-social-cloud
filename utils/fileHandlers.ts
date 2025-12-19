@@ -156,17 +156,32 @@ const CSV_MAPPING: Record<string, string> = {
     'responsabile': 'assignedTo'
 };
 
+// Pulisce le stringhe da caratteri problematici (smart quotes, invisible chars)
+// Risolve problemi di apostrofi rotti (’) e virgolette curve (“ ”)
+const cleanCsvString = (str: string): string => {
+    if (!str) return '';
+    return str
+        .replace(/[\u2018\u2019]/g, "'") // Sostituisci Smart Single Quotes con apostrofo standard
+        .replace(/[\u201C\u201D]/g, '"') // Sostituisci Smart Double Quotes con virgolette standard
+        .replace(/\u2026/g, "...")     // Ellipsis
+        .trim();
+};
+
 // Funzione helper per parsare una riga CSV gestendo le virgolette
 const parseCsvLine = (line: string, delimiter: string): string[] => {
     const values = [];
     let current = '';
     let inQuotes = false;
     
-    for (let i = 0; i < line.length; i++) {
-        const char = line[i];
+    // Normalizziamo la riga prima del parsing per evitare che smart quotes rompano la logica CSV se usate impropriamente
+    // Manteniamo però intatta la struttura dei delimitatori
+    const cleanedLine = line.replace(/[\u201C\u201D]/g, '"'); 
+
+    for (let i = 0; i < cleanedLine.length; i++) {
+        const char = cleanedLine[i];
         
         if (char === '"') {
-            if (inQuotes && line[i + 1] === '"') {
+            if (inQuotes && cleanedLine[i + 1] === '"') {
                 // Doppie virgolette dentro una stringa quotata -> una virgoletta singola
                 current += '"';
                 i++;
@@ -186,15 +201,18 @@ const parseCsvLine = (line: string, delimiter: string): string[] => {
 };
 
 export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = []): Post[] => {
-    const lines = csvContent.split(/\r?\n/).filter(line => line.trim() !== '');
+    // Rimuove il BOM (Byte Order Mark) se presente all'inizio del file (comune in UTF-8 Excel)
+    const cleanContent = csvContent.replace(/^\uFEFF/, '');
+    
+    const lines = cleanContent.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length < 2) return [];
 
     // Rileva delimitatore (virgola o punto e virgola)
     const firstLine = lines[0];
     const delimiter = firstLine.includes(';') ? ';' : ',';
     
-    // Pulisce headers da spazi extra e virgolette
-    const headers = parseCsvLine(lines[0].toLowerCase(), delimiter).map(h => h.trim().replace(/^"|"$/g, ''));
+    // Pulisce headers
+    const headers = parseCsvLine(lines[0].toLowerCase(), delimiter).map(h => cleanCsvString(h).replace(/^"|"$/g, ''));
     
     const posts: Post[] = [];
 
@@ -212,26 +230,26 @@ export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = 
         };
 
         // GESTIONE INDIPENDENTE DALL'ORDINE DELLE COLONNE
-        // Iteriamo sugli headers (che sappiamo cosa sono grazie alla mappatura)
-        // e prendiamo il valore corrispondente dallo stesso indice nella riga dei valori.
         headers.forEach((header, index) => {
             const mappedKey = CSV_MAPPING[header];
             
             // Se l'header è riconosciuto e c'è un valore in quella posizione
             if (mappedKey && values[index] !== undefined) {
-                let value = values[index].trim();
+                let value = values[index];
                 
-                // Rimuovi virgolette esterne se presenti (comune nei CSV generati da Excel)
+                // Rimuovi virgolette esterne
                 if (value.startsWith('"') && value.endsWith('"')) {
                     value = value.slice(1, -1);
                 }
                 
+                // Applica pulizia caratteri speciali (smart quotes, etc.)
+                value = cleanCsvString(value);
+                
                 // Fix specifico per link che a volte arrivano con spazi strani
                 if (mappedKey === 'externalLink' || mappedKey === 'creativityLink') {
-                     value = value.replace(/\s/g, ''); // Rimuove tutti gli spazi dai link
+                     value = value.replace(/\s/g, ''); 
                 }
 
-                // Assegnazione diretta (gestiremo i tipi speciali dopo)
                 postData[mappedKey] = value;
             }
         });
@@ -261,7 +279,6 @@ export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = 
                 const parsed = moment(postData.date, dateTimeFormats.concat(dateFormats), true);
                 if (parsed.isValid()) {
                     finalDate = parsed;
-                    // Se il formato era solo data (senza ora), moment imposta l'ora a 00:00.
                 }
             }
         }

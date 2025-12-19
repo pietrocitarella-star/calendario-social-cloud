@@ -35,7 +35,8 @@ const TYPE_COLORS = [
     'bg-teal-500',
     'bg-emerald-500',
     'bg-lime-500',
-    'bg-amber-500'
+    'bg-amber-500',
+    'bg-fuchsia-500'
 ];
 
 // Mappa per convertire le classi Tailwind in Hex per gli SVG
@@ -56,6 +57,7 @@ const TAILWIND_HEX_MAP: Record<string, string> = {
     'bg-indigo-400': '#818cf8',
     'bg-red-500': '#ef4444',
     'bg-violet-600': '#7c3aed',
+    'bg-fuchsia-500': '#d946ef',
 };
 
 const resolveColor = (color: string) => {
@@ -64,8 +66,15 @@ const resolveColor = (color: string) => {
 };
 
 // ... (Componenti grafici KPI, Donut, Progress) ...
-const KPICard: React.FC<{ title: string; value: number | string; colorClass?: string; icon?: React.ReactNode; subtext?: string }> = ({ title, value, colorClass = "text-gray-900 dark:text-white", icon, subtext }) => (
-    <div className="bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 flex items-center justify-between transition-transform hover:scale-105 h-full">
+const KPICard: React.FC<{ 
+    title: string; 
+    value: number | string; 
+    colorClass?: string; 
+    icon?: React.ReactNode; 
+    subtext?: string;
+    className?: string; // Nuova prop per stili custom container
+}> = ({ title, value, colorClass = "text-gray-900 dark:text-white", icon, subtext, className = "" }) => (
+    <div className={`bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 flex items-center justify-between transition-transform hover:scale-105 h-full ${className}`}>
         <div>
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{title}</p>
             <p className={`text-2xl font-bold mt-1 ${colorClass}`}>{value}</p>
@@ -516,8 +525,9 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                              <KPICard 
                                 title="Post Pubblicati (Netto)" 
                                 value={stats.netPublished} 
-                                colorClass="text-violet-600 dark:text-violet-400" 
-                                icon={<span className="text-2xl">🎯</span>}
+                                colorClass="text-violet-700 dark:text-violet-300 text-3xl" 
+                                className="ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-900/20 transform scale-105 z-10 shadow-lg border-transparent"
+                                icon={<span className="text-3xl">🎯</span>}
                                 subtext="Esclusi: Telegram, WhatsApp, Collaborazioni"
                             />
                             {/* Placeholder */}

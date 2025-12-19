@@ -12,7 +12,8 @@ export const ALLOWED_EMAILS = [
 ];
 
 // Ordiniamo alfabeticamente i tipi di post per migliorare l'UX nei menu a tendina
-export const POST_STATUSES: PostStatus[] = Object.values(PostStatus);
+// MODIFICA: Anche gli stati sono ora ordinati alfabeticamente
+export const POST_STATUSES: PostStatus[] = Object.values(PostStatus).sort((a, b) => a.localeCompare(b));
 export const POST_TYPES: PostType[] = Object.values(PostType).sort((a, b) => a.localeCompare(b));
 
 export const STATUS_COLORS: Record<PostStatus, string> = {
@@ -22,4 +23,5 @@ export const STATUS_COLORS: Record<PostStatus, string> = {
     [PostStatus.Waiting]: 'bg-indigo-400',
     [PostStatus.Scheduled]: 'bg-blue-400',
     [PostStatus.Published]: 'bg-green-500',
+    [PostStatus.Cancelled]: 'bg-slate-600', // Grigio scuro/ardesia per Cancellato
 };

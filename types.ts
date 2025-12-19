@@ -1,5 +1,4 @@
 
-
 export interface SocialChannel {
   id: string;
   name: string;
@@ -19,6 +18,7 @@ export enum PostStatus {
   Waiting = 'in attesa',
   Scheduled = 'programmato',
   Published = 'pubblicato',
+  Cancelled = 'cancellato',
 }
 
 export enum PostType {
@@ -29,6 +29,7 @@ export enum PostType {
   Story = 'storia',
   Update = 'aggiornamento',
   Collaboration = 'collaborazione',
+  Repost = 'repost',
 }
 
 export interface PostVersion {

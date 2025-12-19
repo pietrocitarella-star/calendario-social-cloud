@@ -1,6 +1,6 @@
 
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 // --- ISTRUZIONI IMPORTANTI ---
@@ -24,6 +24,19 @@ const app = initializeApp(firebaseConfig);
 
 // Esportiamo il database per usarlo nel resto dell'app
 export const db = getFirestore(app);
+
+// ABILITAZIONE PERSISTENZA OFFLINE (CACHE)
+// Questo permette all'app di caricare i dati istantaneamente dalla cache locale
+// prima di sincronizzarsi con il server, migliorando drasticamente la percezione di velocità.
+enableIndexedDbPersistence(db).catch((err) => {
+    if (err.code == 'failed-precondition') {
+        // Probabilmente più tab aperti insieme
+        console.warn('Persistenza fallita: più tab aperti.');
+    } else if (err.code == 'unimplemented') {
+        // Il browser non supporta la feature
+        console.warn('Persistenza non supportata dal browser.');
+    }
+});
 
 // Esportiamo il servizio di autenticazione
 export const auth = getAuth(app);
