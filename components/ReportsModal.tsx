@@ -39,7 +39,6 @@ const TYPE_COLORS = [
     'bg-fuchsia-500'
 ];
 
-// Mappa per convertire le classi Tailwind in Hex per gli SVG
 const TAILWIND_HEX_MAP: Record<string, string> = {
     'bg-pink-500': '#ec4899',
     'bg-purple-500': '#a855f7',
@@ -58,6 +57,7 @@ const TAILWIND_HEX_MAP: Record<string, string> = {
     'bg-red-500': '#ef4444',
     'bg-violet-600': '#7c3aed',
     'bg-fuchsia-500': '#d946ef',
+    'bg-fuchsia-600': '#c026d3',
 };
 
 const resolveColor = (color: string) => {
@@ -65,14 +65,13 @@ const resolveColor = (color: string) => {
     return TAILWIND_HEX_MAP[color] || '#9ca3af';
 };
 
-// ... (Componenti grafici KPI, Donut, Progress) ...
 const KPICard: React.FC<{ 
     title: string; 
     value: number | string; 
     colorClass?: string; 
     icon?: React.ReactNode; 
     subtext?: string;
-    className?: string; // Nuova prop per stili custom container
+    className?: string; 
 }> = ({ title, value, colorClass = "text-gray-900 dark:text-white", icon, subtext, className = "" }) => (
     <div className={`bg-white dark:bg-gray-700 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-600 flex items-center justify-between transition-transform hover:scale-105 h-full ${className}`}>
         <div>
@@ -87,14 +86,12 @@ const KPICard: React.FC<{
 const DonutChart: React.FC<{ data: { label: string; value: number; color: string }[] }> = ({ data }) => {
     const total = data.reduce((acc, item) => acc + item.value, 0);
     if (total === 0) return <div className="text-center text-gray-400 py-10">Nessun dato nel periodo selezionato</div>;
-
     let cumulativePercent = 0;
     const size = 160;
     const strokeWidth = 25;
     const radius = (size - strokeWidth) / 2;
     const center = size / 2;
     const circumference = 2 * Math.PI * radius;
-
     return (
         <div className="flex flex-col items-center justify-center gap-6 w-full">
             <div className="relative w-40 h-40 flex-shrink-0">
@@ -106,17 +103,7 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
                         cumulativePercent += percent;
                         const strokeColor = resolveColor(item.color);
                         return (
-                            <circle
-                                key={index}
-                                cx={center}
-                                cy={center}
-                                r={radius}
-                                fill="transparent"
-                                stroke={strokeColor}
-                                strokeWidth={strokeWidth}
-                                strokeDasharray={dashArray}
-                                strokeDashoffset={dashOffset}
-                            />
+                            <circle key={index} cx={center} cy={center} r={radius} fill="transparent" stroke={strokeColor} strokeWidth={strokeWidth} strokeDasharray={dashArray} strokeDashoffset={dashOffset} />
                         );
                     })}
                 </svg>
@@ -153,10 +140,7 @@ const ProgressBarChart: React.FC<{ data: { label: string; value: number; color: 
                         <span className="text-gray-500 dark:text-gray-400 font-mono">{item.value}</span>
                     </div>
                     <div className="w-full bg-gray-100 dark:bg-gray-600 rounded-full h-2.5 overflow-hidden">
-                        <div 
-                            className={`h-2.5 rounded-full transition-all duration-500 ease-out group-hover:opacity-90 ${!item.color.startsWith('#') ? item.color : ''}`}
-                            style={{ width: `${(item.value / max) * 100}%`, backgroundColor: item.color.startsWith('#') ? item.color : undefined }}
-                        ></div>
+                        <div className={`h-2.5 rounded-full transition-all duration-500 ease-out group-hover:opacity-90 ${!item.color.startsWith('#') ? item.color : ''}`} style={{ width: `${(item.value / max) * 100}%`, backgroundColor: item.color.startsWith('#') ? item.color : undefined }}></div>
                     </div>
                 </div>
             ))}
@@ -181,50 +165,31 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     const [customEndDate, setCustomEndDate] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedYear, setSelectedYear] = useState(moment().year());
-
-    const [chartPrefs, setChartPrefs] = useState({
-        status: 'donut' as ChartType,
-        channel: 'bar' as ChartType,
-        type: 'bar' as ChartType,
-        team: 'bar' as ChartType
-    });
-    
+    const [chartPrefs, setChartPrefs] = useState({ status: 'donut' as ChartType, channel: 'bar' as ChartType, type: 'bar' as ChartType, team: 'bar' as ChartType });
     const months = moment.monthsShort();
     
-    const handleYearChange = (delta: number) => {
-        setSelectedYear(prev => prev + delta);
-    };
-
+    const handleYearChange = (delta: number) => setSelectedYear(prev => prev + delta);
     const handleMonthPreset = (monthIndex: number) => {
         const start = moment().year(selectedYear).month(monthIndex).startOf('month').format('YYYY-MM-DD');
         const end = moment().year(selectedYear).month(monthIndex).endOf('month').format('YYYY-MM-DD');
-        setCustomStartDate(start);
-        setCustomEndDate(end);
-        setTimeRange('CUSTOM');
+        setCustomStartDate(start); setCustomEndDate(end); setTimeRange('CUSTOM');
     };
-
     const handleYearPreset = () => {
         const start = moment().year(selectedYear).startOf('year').format('YYYY-MM-DD');
         const end = moment().year(selectedYear).endOf('year').format('YYYY-MM-DD');
-        setCustomStartDate(start);
-        setCustomEndDate(end);
-        setTimeRange('CUSTOM');
+        setCustomStartDate(start); setCustomEndDate(end); setTimeRange('CUSTOM');
     };
 
     const filteredPosts = useMemo(() => {
         let result = posts;
         const now = moment();
-
-        // 1. Time Range Filter
         if (timeRange === 'CUSTOM') {
             if (customStartDate && customEndDate) {
-                const start = moment(customStartDate).startOf('day');
-                const end = moment(customEndDate).endOf('day');
+                const start = moment(customStartDate).startOf('day'); const end = moment(customEndDate).endOf('day');
                 result = result.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
             }
         } else if (timeRange === 'YEAR') {
-            const start = moment().year(selectedYear).startOf('year');
-            const end = moment().year(selectedYear).endOf('year');
+            const start = moment().year(selectedYear).startOf('year'); const end = moment().year(selectedYear).endOf('year');
             result = result.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
         } else if (timeRange !== 'ALL') {
             const rangeMap: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1A': 12 };
@@ -233,19 +198,10 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                  result = result.filter(p => moment(p.date).isAfter(cutoff));
             }
         }
-
-        // 2. Search Filter
         if (searchTerm.trim()) {
             const lowerTerm = searchTerm.toLowerCase();
-            result = result.filter(p => 
-                p.title.toLowerCase().includes(lowerTerm) ||
-                p.social.toLowerCase().includes(lowerTerm) ||
-                p.postType.toLowerCase().includes(lowerTerm) ||
-                p.status.toLowerCase().includes(lowerTerm) ||
-                (p.notes && p.notes.toLowerCase().includes(lowerTerm))
-            );
+            result = result.filter(p => p.title.toLowerCase().includes(lowerTerm) || p.social.toLowerCase().includes(lowerTerm) || p.postType.toLowerCase().includes(lowerTerm) || p.status.toLowerCase().includes(lowerTerm) || (p.notes && p.notes.toLowerCase().includes(lowerTerm)));
         }
-
         return result;
     }, [posts, timeRange, searchTerm, customStartDate, customEndDate, selectedYear]);
 
@@ -254,345 +210,109 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         const published = filteredPosts.filter(p => p.status === PostStatus.Published).length;
         const scheduled = filteredPosts.filter(p => p.status === PostStatus.Scheduled).length;
         const drafts = filteredPosts.filter(p => p.status === PostStatus.Draft).length;
+        const collaborations = filteredPosts.filter(p => p.status === PostStatus.Collaboration).length;
 
+        // NUOVA LOGICA: Netto include solo Published (escludendo canali TG/WA)
+        // Collaborazioni ora sono uno stato a parte, quindi sono già escluse dal conteggio "Published"
         const netPublished = filteredPosts.filter(p => {
             if (p.status !== PostStatus.Published) return false;
-            
             const isExcludedChannel = p.social === 'Telegram' || p.social === 'WhatsApp';
-            const isExcludedType = p.postType === PostType.Collaboration; 
-            
-            return !isExcludedChannel && !isExcludedType;
+            return !isExcludedChannel;
         }).length;
 
         const postsByChannel = channels.map(channel => ({
-            label: channel.name,
-            value: filteredPosts.filter(p => p.social === channel.name).length,
-            color: channel.color
+            label: channel.name, value: filteredPosts.filter(p => p.social === channel.name).length, color: channel.color
         })).sort((a,b) => b.value - a.value).filter(item => item.value > 0);
 
         const typeCounts: Record<string, number> = {};
         filteredPosts.forEach(p => { typeCounts[p.postType] = (typeCounts[p.postType] || 0) + 1; });
-        const postsByType = Object.entries(typeCounts)
-            .map(([type, count], index) => ({
-                label: type,
-                value: count,
-                color: TYPE_COLORS[index % TYPE_COLORS.length]
-            })).sort((a, b) => b.value - a.value);
+        const postsByType = Object.entries(typeCounts).map(([type, count], index) => ({
+            label: type, value: count, color: TYPE_COLORS[index % TYPE_COLORS.length]
+        })).sort((a, b) => b.value - a.value);
 
         const statusData = [
             { label: 'Pubblicati', value: published, color: 'bg-green-500' },
+            { label: 'Collaborazioni', value: collaborations, color: 'bg-fuchsia-600' },
             { label: 'Programmati', value: scheduled, color: 'bg-blue-400' },
             { label: 'In Bozze', value: drafts, color: 'bg-yellow-400' },
             { label: 'Da Approvare', value: filteredPosts.filter(p => p.status === PostStatus.NeedsApproval).length, color: 'bg-orange-400' },
-            { label: 'Altri', value: totalPosts - published - scheduled - drafts - filteredPosts.filter(p => p.status === PostStatus.NeedsApproval).length, color: 'bg-gray-400' },
+            { label: 'Altri', value: totalPosts - published - collaborations - scheduled - drafts - filteredPosts.filter(p => p.status === PostStatus.NeedsApproval).length, color: 'bg-gray-400' },
         ].filter(d => d.value > 0);
 
         const teamPublishedCounts: Record<string, number> = {};
-        filteredPosts.filter(p => p.status === PostStatus.Published && p.assignedTo).forEach(p => {
-            if (p.assignedTo) {
-                teamPublishedCounts[p.assignedTo] = (teamPublishedCounts[p.assignedTo] || 0) + 1;
-            }
+        filteredPosts.filter(p => (p.status === PostStatus.Published || p.status === PostStatus.Collaboration) && p.assignedTo).forEach(p => {
+            if (p.assignedTo) teamPublishedCounts[p.assignedTo] = (teamPublishedCounts[p.assignedTo] || 0) + 1;
         });
-
         const teamStats = Object.entries(teamPublishedCounts).map(([id, count]) => {
              const member = teamMembers.find(m => m.id === id);
-             return {
-                 label: member ? member.name : 'Utente rimosso',
-                 value: count,
-                 color: member ? member.color : '#9ca3af'
-             };
+             return { label: member ? member.name : 'Utente rimosso', value: count, color: member ? member.color : '#9ca3af' };
         }).sort((a,b) => b.value - a.value);
 
-        return { totalPosts, published, scheduled, drafts, netPublished, postsByChannel, postsByType, statusData, teamStats };
+        return { totalPosts, published, scheduled, drafts, collaborations, netPublished, postsByChannel, postsByType, statusData, teamStats };
     }, [filteredPosts, channels, teamMembers]);
 
-    // NUOVA FUNZIONE DI STAMPA: Crea un iframe pulito e stampa quello
     const handlePrint = () => {
-        const content = document.getElementById('reports-modal-content-body');
-        if (!content) return;
-
-        // Crea un iframe invisibile
-        const iframe = document.createElement('iframe');
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        document.body.appendChild(iframe);
-
-        const doc = iframe.contentWindow?.document;
+        const content = document.getElementById('reports-modal-content-body'); if (!content) return;
+        const iframe = document.createElement('iframe'); iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0'; iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
+        document.body.appendChild(iframe); const doc = iframe.contentWindow?.document;
         if (doc) {
-            doc.open();
-            doc.write(`
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Report Analitico</title>
-                    <script src="https://cdn.tailwindcss.com"></script>
-                    <style>
-                        body { 
-                            background-color: white !important; 
-                            -webkit-print-color-adjust: exact; 
-                            print-color-adjust: exact;
-                            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                            padding: 20px;
-                        }
-                        .no-print { display: none !important; }
-                        h2, h3, p, span, div { color: black !important; }
-                    </style>
-                </head>
-                <body>
-                    <div class="mb-6 border-b pb-4">
-                        <h1 class="text-3xl font-bold">Report Analitico</h1>
-                        <p class="text-gray-600">
-                            Generato il ${moment().format('DD/MM/YYYY HH:mm')}
-                            <br/>
-                            Periodo: ${timeRange === 'CUSTOM' ? `${moment(customStartDate).format('DD/MM/YY')} - ${moment(customEndDate).format('DD/MM/YY')}` : RANGE_LABELS[timeRange]}
-                        </p>
-                    </div>
-                    <div id="print-body">
-                        ${content.innerHTML}
-                    </div>
-                    <script>
-                        // Attendi che Tailwind venga caricato
-                        window.onload = function() {
-                            // Piccola attesa per essere sicuri che il rendering sia finito
-                            setTimeout(function() {
-                                window.print();
-                                // Rimuovi l'iframe dopo la stampa (opzionale, ma pulito)
-                                // window.parent.document.body.removeChild(window.frameElement); 
-                            }, 500);
-                        }
-                    </script>
-                </body>
-                </html>
-            `);
+            doc.open(); doc.write(`
+                <html><head><title>Report Analitico</title><script src="https://cdn.tailwindcss.com"></script><style>body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: sans-serif; padding: 20px; } .no-print { display: none !important; } h2, h3, p, span, div { color: black !important; }</style></head>
+                <body><div class="mb-6 border-b pb-4"><h1 class="text-3xl font-bold">Report Analitico</h1><p class="text-gray-600">Generato il ${moment().format('DD/MM/YYYY HH:mm')}<br/>Periodo: ${timeRange === 'CUSTOM' ? `${moment(customStartDate).format('DD/MM/YY')} - ${moment(customEndDate).format('DD/MM/YY')}` : RANGE_LABELS[timeRange]}</p></div><div id="print-body">${content.innerHTML}</div><script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script></body></html>`);
             doc.close();
         }
     };
 
     const handleExportCSV = () => {
-        let dateRangeLabel = '';
-        const now = moment();
-        
-        if (timeRange === 'CUSTOM' && customStartDate && customEndDate) {
-            dateRangeLabel = `${moment(customStartDate).format('DD/MM/YYYY')} - ${moment(customEndDate).format('DD/MM/YYYY')}`;
-        } else if (timeRange === 'YEAR') {
-            dateRangeLabel = `01/01/${selectedYear} - 31/12/${selectedYear}`;
-        } else if (timeRange === 'ALL') {
-             dateRangeLabel = 'Tutto lo storico';
-        } else {
-             const rangeMap: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1A': 12 };
-             if (rangeMap[timeRange]) {
-                 const start = now.clone().subtract(rangeMap[timeRange], 'months').format('DD/MM/YYYY');
-                 const end = now.format('DD/MM/YYYY');
-                 dateRangeLabel = `${start} - ${end} (${RANGE_LABELS[timeRange]})`;
-             } else {
-                 dateRangeLabel = RANGE_LABELS[timeRange];
-             }
-        }
-
         const rows = [
-            ['REPORT ANALITICO CALENDARIO EDITORIALE'],
-            ['Data Generazione', moment().format('DD/MM/YYYY HH:mm')],
-            ['Periodo Analizzato', dateRangeLabel],
-            ['Filtro Ricerca', searchTerm || 'Nessuno'],
-            [],
-            ['KPI GENERALI'],
-            ['Totale Post', stats.totalPosts],
-            ['Pubblicati (Totale)', stats.published],
-            ['Pubblicati (Netto - No TG/WA/Collab)', stats.netPublished],
-            ['Programmati', stats.scheduled],
-            ['Bozze', stats.drafts],
-            [],
-            ['DISTRIBUZIONE PER CANALE'],
-            ['Canale', 'Numero Post'],
-            ...stats.postsByChannel.map(c => [c.label, c.value]),
-            [],
-            ['DISTRIBUZIONE PER TIPO CONTENUTO'],
-            ['Tipo', 'Numero Post'],
-            ...stats.postsByType.map(t => [t.label, t.value]),
-            [],
-            ['PERFORMANCE TEAM (Post Pubblicati)'],
-            ['Membro', 'Post Pubblicati'],
-            ...stats.teamStats.map(m => [m.label, m.value]),
-            []
+            ['REPORT ANALITICO CALENDARIO EDITORIALE'], ['Data Generazione', moment().format('DD/MM/YYYY HH:mm')], ['KPI GENERALI'], ['Totale Post', stats.totalPosts], ['Pubblicati (Totale)', stats.published], ['Collaborazioni', stats.collaborations], ['Pubblicati (Netto)', stats.netPublished], [], ['DISTRIBUZIONE PER CANALE'], ...stats.postsByChannel.map(c => [c.label, c.value])
         ];
-
         const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
-        const link = document.createElement("a");
-        link.setAttribute("href", encodeURI(csvContent));
-        link.setAttribute("download", `report_social_${moment().format('YYYY-MM-DD')}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `report_social_${moment().format('YYYY-MM-DD')}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
 
     if (!isOpen) return null;
     
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4">
-            
             <div className="w-full h-full flex items-center justify-center">
                 <div className="bg-gray-50 dark:bg-gray-800 w-full max-w-7xl rounded-2xl shadow-2xl flex flex-col max-h-[95vh]">
-                    
-                    {/* Header */}
                     <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl shadow-sm">
                         <div className="flex justify-between items-center p-4">
-                            <div>
-                                <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Report Analitico</h2>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
-                                    Analisi dettagliata performance
-                                </p>
-                            </div>
+                            <div><h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Report Analitico</h2></div>
                             <div className="flex items-center gap-2 no-print">
                                 <button onClick={handleExportCSV} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-medium border border-emerald-200">CSV</button>
                                 <button onClick={handlePrint} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-medium border border-indigo-200">Stampa</button>
                                 <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
                             </div>
                         </div>
-
-                        {/* Filters Panel */}
-                        <div className="px-4 pb-4 flex flex-col xl:flex-row gap-4 justify-between items-start bg-gray-50/50 dark:bg-gray-800/50 no-print border-t border-gray-100 dark:border-gray-700 pt-3">
-                            {/* ... filters content ... */}
-                            <div className="w-full xl:w-64">
-                                <input
-                                    type="text"
-                                    placeholder="Cerca nei report..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 shadow-sm"
-                                />
-                            </div>
-
-                            <div className="flex flex-col gap-2 w-full">
-                                <div className="flex justify-center xl:justify-end items-center gap-3 mb-1">
-                                    <button onClick={() => handleYearChange(-1)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white px-2">&lt;</button>
-                                    <span className="font-bold text-gray-800 dark:text-white text-sm">{selectedYear}</span>
-                                    <button onClick={() => handleYearChange(1)} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white px-2">&gt;</button>
-                                </div>
-                                <div className="flex flex-wrap gap-1 justify-center xl:justify-end">
-                                    {months.map((m, idx) => (
-                                        <button
-                                            key={m}
-                                            onClick={() => handleMonthPreset(idx)}
-                                            className={`px-2 py-1 text-[10px] uppercase font-bold rounded border transition-colors ${timeRange === 'CUSTOM' && moment(customStartDate).year() === selectedYear && moment(customStartDate).month() === idx ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-100'}`}
-                                        >
-                                            {m}
-                                        </button>
-                                    ))}
-                                    <button 
-                                        onClick={handleYearPreset}
-                                        className={`px-2 py-1 text-[10px] uppercase font-bold rounded border ml-1 ${timeRange === 'CUSTOM' && moment(customStartDate).year() === selectedYear && moment(customStartDate).format('MM-DD') === '01-01' ? 'bg-purple-600 text-white border-purple-600' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'}`}
-                                    >
-                                        Tutto il {selectedYear}
-                                    </button>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2 justify-center xl:justify-end">
-                                    <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Periodo:</span>
-                                    <input type="date" value={customStartDate} onChange={(e) => { setCustomStartDate(e.target.value); setTimeRange('CUSTOM'); }} className="px-2 py-1 text-xs border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                                    <span className="text-xs text-gray-400">-</span>
-                                    <input type="date" value={customEndDate} onChange={(e) => { setCustomEndDate(e.target.value); setTimeRange('CUSTOM'); }} className="px-2 py-1 text-xs border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                                    <div className="h-4 w-px bg-gray-300 mx-2"></div>
-                                    {(['1M', '3M', '6M', '1A', 'ALL'] as TimeRange[]).map((range) => (
-                                        <button key={range} onClick={() => setTimeRange(range)} className={`px-2 py-1 text-xs font-semibold rounded transition-all ${timeRange === range ? 'bg-gray-800 text-white dark:bg-white dark:text-gray-900' : 'text-gray-500 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-700'}`}>{range}</button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
                     </div>
-
-                    {/* Body (ID usato per la stampa) */}
                     <div id="reports-modal-content-body" className="p-6 overflow-y-auto flex-grow space-y-6 bg-gray-50 dark:bg-gray-900/50">
-                        
-                        <div className="flex items-center justify-between no-print">
-                             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                Risultati: <span className="text-gray-900 dark:text-white font-bold">{filteredPosts.length}</span> post nel periodo <span className="text-gray-900 dark:text-white font-bold">{timeRange === 'CUSTOM' ? `${moment(customStartDate).format('DD/MM/YY')} - ${moment(customEndDate).format('DD/MM/YY')}` : RANGE_LABELS[timeRange]}</span>
-                            </p>
-                        </div>
-
-                        {/* KPI Row 1: Generale */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <KPICard title="Totale" value={stats.totalPosts} icon={<span className="text-2xl">📝</span>} />
-                            <KPICard title="Pubblicati (Tutti)" value={stats.published} colorClass="text-green-600 dark:text-green-400" icon={<span className="text-2xl">✅</span>} />
+                            <KPICard title="Pubblicati" value={stats.published} colorClass="text-green-600 dark:text-green-400" icon={<span className="text-2xl">✅</span>} />
+                            <KPICard title="Collaborazioni" value={stats.collaborations} colorClass="text-fuchsia-600 dark:text-fuchsia-400" icon={<span className="text-2xl">🤝</span>} />
                             <KPICard title="Programmati" value={stats.scheduled} colorClass="text-blue-600 dark:text-blue-400" icon={<span className="text-2xl">📅</span>} />
-                            <KPICard title="Bozze" value={stats.drafts} colorClass="text-yellow-600 dark:text-yellow-400" icon={<span className="text-2xl">✏️</span>} />
                         </div>
-
-                        {/* KPI Row 2: Specifiche e Nette */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <KPICard 
-                                title="Post Pubblicati (Netto)" 
-                                value={stats.netPublished} 
-                                colorClass="text-violet-700 dark:text-violet-300 text-3xl" 
-                                className="ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-900/20 transform scale-105 z-10 shadow-lg border-transparent"
-                                icon={<span className="text-3xl">🎯</span>}
-                                subtext="Esclusi: Telegram, WhatsApp, Collaborazioni"
-                            />
-                            {/* Placeholder */}
-                            <div className="hidden md:block"></div> 
+                             <KPICard title="Post Pubblicati (Netto)" value={stats.netPublished} colorClass="text-violet-700 dark:text-violet-300 text-3xl" className="ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-900/20 transform scale-105 z-10 shadow-lg border-transparent" icon={<span className="text-3xl">🎯</span>} subtext="Esclusi: TG, WA, Collaborazioni (già separate)" />
                         </div>
-
                         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
-                            
-                            {/* Status Distribution */}
                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white">Stato Contenuti</h3>
-                                    <ChartToggle current={chartPrefs.status} onChange={(t) => setChartPrefs(prev => ({...prev, status: t}))} />
-                                </div>
-                                <div className="flex-grow flex items-center justify-center min-h-[200px]">
-                                    {chartPrefs.status === 'donut' 
-                                        ? <DonutChart data={stats.statusData} />
-                                        : <ProgressBarChart data={stats.statusData} />
-                                    }
-                                </div>
+                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Stato</h3><ChartToggle current={chartPrefs.status} onChange={(t) => setChartPrefs(prev => ({...prev, status: t}))} /></div>
+                                <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.status === 'donut' ? <DonutChart data={stats.statusData} /> : <ProgressBarChart data={stats.statusData} />}</div>
                             </div>
-
-                            {/* Channel Performance */}
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white">Top Canali</h3>
-                                    <ChartToggle current={chartPrefs.channel} onChange={(t) => setChartPrefs(prev => ({...prev, channel: t}))} />
-                                </div>
-                                <div className="flex-grow flex items-center justify-center min-h-[200px]">
-                                    {chartPrefs.channel === 'donut' 
-                                        ? <DonutChart data={stats.postsByChannel} />
-                                        : <ProgressBarChart data={stats.postsByChannel} />
-                                    }
-                                </div>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Canali</h3><ChartToggle current={chartPrefs.channel} onChange={(t) => setChartPrefs(prev => ({...prev, channel: t}))} /></div>
+                                <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.channel === 'donut' ? <DonutChart data={stats.postsByChannel} /> : <ProgressBarChart data={stats.postsByChannel} />}</div>
                             </div>
-
-                            {/* Type Performance */}
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white">Tipologia</h3>
-                                    <ChartToggle current={chartPrefs.type} onChange={(t) => setChartPrefs(prev => ({...prev, type: t}))} />
-                                </div>
-                                <div className="flex-grow flex items-center justify-center min-h-[200px]">
-                                    {chartPrefs.type === 'donut' 
-                                        ? <DonutChart data={stats.postsByType} />
-                                        : <ProgressBarChart data={stats.postsByType} />
-                                    }
-                                </div>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Tipologia</h3><ChartToggle current={chartPrefs.type} onChange={(t) => setChartPrefs(prev => ({...prev, type: t}))} /></div>
+                                <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.type === 'donut' ? <DonutChart data={stats.postsByType} /> : <ProgressBarChart data={stats.postsByType} />}</div>
                             </div>
-
-                             {/* Team Performance */}
-                             <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-sm md:text-base font-bold text-gray-800 dark:text-white">Performance Team</h3>
-                                    <ChartToggle current={chartPrefs.team} onChange={(t) => setChartPrefs(prev => ({...prev, team: t}))} />
-                                </div>
-                                <div className="flex-grow flex items-center justify-center min-h-[200px]">
-                                    {stats.teamStats.length === 0 ? (
-                                        <p className="text-sm text-gray-400 text-center">Nessun post pubblicato assegnato nel periodo.</p>
-                                    ) : (
-                                        chartPrefs.team === 'donut' 
-                                            ? <DonutChart data={stats.teamStats} />
-                                            : <ProgressBarChart data={stats.teamStats} />
-                                    )}
-                                </div>
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Team</h3><ChartToggle current={chartPrefs.team} onChange={(t) => setChartPrefs(prev => ({...prev, team: t}))} /></div>
+                                <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.team === 'donut' ? <DonutChart data={stats.teamStats} /> : <ProgressBarChart data={stats.teamStats} />}</div>
                             </div>
                         </div>
                     </div>

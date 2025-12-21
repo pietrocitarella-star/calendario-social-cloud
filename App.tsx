@@ -17,7 +17,8 @@ import {
     deleteChannelFromDb,
     subscribeToTeam,
     saveTeamMembers,
-    deleteTeamMemberFromDb
+    deleteTeamMemberFromDb,
+    migrateCollaborationData
 } from './services/firestoreService';
 import { STATUS_COLORS, ALLOWED_EMAILS } from './constants';
 import { exportPostsToJson, exportPostsToCsv, parseCsvToPosts } from './utils/fileHandlers';
@@ -28,8 +29,6 @@ import LoginScreen from './components/LoginScreen';
 import { auth } from './firebaseConfig';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 
-// --- LAZY LOADING DEI COMPONENTI PESANTI ---
-// Vengono caricati solo quando richiesti, riducendo il bundle iniziale
 const PostModal = lazy(() => import('./components/PostModal'));
 const ReportsModal = lazy(() => import('./components/ReportsModal'));
 const SocialChannelsModal = lazy(() => import('./components/SocialChannelsModal'));
@@ -37,7 +36,6 @@ const TeamMembersModal = lazy(() => import('./components/TeamMembersModal'));
 const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
 const DayDetailsModal = lazy(() => import('./components/DayDetailsModal'));
 
-// Configurazione rigorosa di moment.js per l'italiano
 moment.locale('it');
 moment.updateLocale('it', {
     months: 'Gennaio_Febbraio_Marzo_Aprile_Maggio_Giugno_Luglio_Agosto_Settembre_Ottobre_Novembre_Dicembre'.split('_'),
@@ -64,7 +62,6 @@ const localizer = momentLocalizer(moment);
 const mapPostsToEvents = (posts: Post[]): CalendarEvent[] => {
     return posts.map(post => {
         const start = new Date(post.date);
-        // Default 1 ora di durata
         const end = new Date(start.getTime() + 60 * 60 * 1000); 
         return {
             ...post,
@@ -92,14 +89,13 @@ const calendarMessages = {
 
 const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
-    const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null); // Nuovo stato per gestione accesso
+    const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
 
     const [posts, setPosts] = useState<Post[]>([]); 
     const [reportPosts, setReportPosts] = useState<Post[]>([]); 
     const [isLoadingReportData, setIsLoadingReportData] = useState(false);
 
-    // const [events, setEvents] = useState<CalendarEvent[]>([]); // RIMOSSO: Stato ridondante
     const [socialChannels, setSocialChannels] = useState<SocialChannel[]>([]);
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     
@@ -111,7 +107,6 @@ const App: React.FC = () => {
 
     const [selectedEvent, setSelectedEvent] = useState<Partial<Post> | null>(null);
     
-    // Modali
     const [isPostModalOpen, setIsPostModalOpen] = useState(false);
     const [isReportsModalOpen, setIsReportsModalOpen] = useState(false);
     const [isChannelsModalOpen, setIsChannelsModalOpen] = useState(false);
@@ -125,7 +120,7 @@ const App: React.FC = () => {
     });
 
     const [importPreview, setImportPreview] = useState<{
-        type: 'json' | 'csv'; // Distinguiamo il tipo di import
+        type: 'json' | 'csv';
         total: number;
         valid: number;
         invalid: number;
@@ -144,25 +139,17 @@ const App: React.FC = () => {
         agendaDateFormat: (date, culture, local) => local.format(date, 'ddd DD MMM', culture),
     }), []); 
 
-    // AUTH LISTENER: LOGICA IBRIDA
-    // 1. Password Provider -> Sempre OK (Gestito da Firebase Console)
-    // 2. Google Provider -> Controllo Whitelist (constants.ts)
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
-                // Verifichiamo il metodo di accesso
                 const isPasswordAuth = currentUser.providerData.some(p => p.providerId === 'password');
                 const isGoogleAuth = currentUser.providerData.some(p => p.providerId === 'google.com');
                 const email = currentUser.email;
 
                 if (isPasswordAuth) {
-                    // CASO 1: Accesso con Email/Password (Nativo Firebase)
-                    // Consideriamo l'utente autorizzato perché ha le credenziali corrette
                     setUser(currentUser);
                     setIsAuthorized(true);
                 } else if (isGoogleAuth && email) {
-                    // CASO 2: Accesso con Google
-                    // Dobbiamo verificare la whitelist perché chiunque ha un account Google
                     const normalizedEmail = email.toLowerCase().trim();
                     const allowedEmailsLower = ALLOWED_EMAILS.map(e => e.toLowerCase().trim());
                     
@@ -170,14 +157,10 @@ const App: React.FC = () => {
                         setUser(currentUser);
                         setIsAuthorized(true);
                     } else {
-                        // Utente Google NON in whitelist
-                        console.warn(`Accesso Google negato: ${email} non è in whitelist.`);
-                        setUser(currentUser); // Settiamo l'user per mostrare l'errore
+                        setUser(currentUser);
                         setIsAuthorized(false);
                     }
                 } else {
-                    // Caso fallback (es. altri provider futuri o errori strani)
-                    // Se non sappiamo chi è, applichiamo la whitelist per sicurezza
                     if (email && ALLOWED_EMAILS.map(e => e.toLowerCase().trim()).includes(email.toLowerCase().trim())) {
                          setUser(currentUser);
                          setIsAuthorized(true);
@@ -195,7 +178,13 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
-    // OTTIMIZZAZIONE: Carica solo i post del periodo visibile +/- 2 mesi di buffer
+    // EFFETTO MIGRAZIONE DATI: Eseguito una sola volta quando l'utente è autorizzato
+    useEffect(() => {
+        if (isAuthorized) {
+            migrateCollaborationData();
+        }
+    }, [isAuthorized]);
+
     useEffect(() => {
         if (!user || !isAuthorized) {
             setPosts([]);
@@ -211,7 +200,6 @@ const App: React.FC = () => {
         return () => unsubscribe(); 
     }, [user, isAuthorized, date, view]);
 
-    // REAL-TIME LISTENER FOR CHANNELS (Solo se loggato e autorizzato)
     useEffect(() => {
         if (!user || !isAuthorized) {
             setSocialChannels([]);
@@ -223,7 +211,6 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, [user, isAuthorized]);
 
-    // REAL-TIME LISTENER FOR TEAM (Solo se loggato e autorizzato)
     useEffect(() => {
         if (!user || !isAuthorized) {
             setTeamMembers([]);
@@ -235,14 +222,8 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, [user, isAuthorized]);
 
-    // OTTIMIZZAZIONE RENDERING:
-    // Invece di usare useEffect + setEvents (che causa un re-render extra),
-    // calcoliamo gli eventi direttamente con useMemo.
-    // L'array 'events' sarà ricalcolato solo se 'posts' cambia.
     const events = useMemo(() => mapPostsToEvents(posts), [posts]);
 
-    // ---- HANDLERS ----
-    
     const handleShowReports = async () => {
         setIsLoadingReportData(true);
         const oneYearAgo = moment().subtract(1, 'year').format('YYYY-MM-DD');
@@ -262,7 +243,6 @@ const App: React.FC = () => {
         exportPostsToCsv(allData);
     };
 
-    // ---- NOTIFICATIONS ----
     const notifications = useMemo<AppNotification[]>(() => {
         if (!isAuthorized) return [];
         const alerts: AppNotification[] = [];
@@ -307,7 +287,6 @@ const App: React.FC = () => {
 
     const filteredEvents = useMemo(() => {
         let result = events;
-
         if (searchTerm.trim()) {
             const lowerTerm = searchTerm.toLowerCase();
             result = result.filter(event => 
@@ -315,11 +294,9 @@ const App: React.FC = () => {
                 (event.notes && event.notes.toLowerCase().includes(lowerTerm))
             );
         }
-
         if (activeChannelFilters.length > 0) {
             result = result.filter(event => activeChannelFilters.includes(event.social));
         }
-
         return result;
     }, [events, searchTerm, activeChannelFilters]);
     
@@ -356,13 +333,10 @@ const App: React.FC = () => {
         setIsPostModalOpen(true);
     }, [posts]);
 
-    // HELPERS PER IL FILTRAGGIO NEL CALENDARIO (Headers e Modale Giorno)
     const isPostVisible = useCallback((post: Post) => {
-        // 1. Filtro Canali
         if (activeChannelFilters.length > 0 && !activeChannelFilters.includes(post.social)) {
             return false;
         }
-        // 2. Filtro Ricerca
         if (searchTerm.trim()) {
             const lowerTerm = searchTerm.toLowerCase();
             const matchesSearch = 
@@ -376,12 +350,9 @@ const App: React.FC = () => {
     const handleShowMore = useCallback((events: CalendarEvent[], date: Date) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
-        
-        // Filtra i post usando la stessa logica del calendario principale
         const postsForDay = posts.filter(p => 
             moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
         );
-
         setDayModalData({
             isOpen: true,
             date: date,
@@ -449,19 +420,14 @@ const App: React.FC = () => {
                 let totalRecords = 0;
 
                 if (isCsv) {
-                    // --- CSV LOGIC ---
-                    // Passiamo i teamMembers per risolvere i nomi in ID
                     const parsed = parseCsvToPosts(content, teamMembers);
                     totalRecords = parsed.length;
-                    
-                    // Rimuoviamo gli ID per forzare la creazione di nuovi record (APPEND)
                     sanitizedPosts = parsed.map(p => {
                         const { id, ...rest } = p;
                         return rest as Post;
                     });
                     validCount = sanitizedPosts.length;
                 } else {
-                    // --- JSON LOGIC ---
                     let importedData;
                     try {
                         importedData = JSON.parse(content);
@@ -469,20 +435,16 @@ const App: React.FC = () => {
                         alert("Il file selezionato non contiene un JSON valido.");
                         return;
                     }
-                    
                     if (!Array.isArray(importedData)) {
                         alert("La struttura del file non è corretta (non è una lista).");
                         return;
                     }
-
                     totalRecords = importedData.length;
-
                     importedData.forEach((item: any) => {
                         if (item && typeof item === 'object') {
                             const dateIsValid = item.date && moment(item.date).isValid();
-                            
                             const newPost: Post = {
-                                id: item.id || '', // Mantieni ID per overwrite se esiste
+                                id: item.id || '',
                                 title: item.title || '(Importato senza titolo)',
                                 date: dateIsValid ? moment(item.date).format('YYYY-MM-DDTHH:mm') : moment().format('YYYY-MM-DDTHH:mm'),
                                 social: item.social || (socialChannels.length > 0 ? socialChannels[0].name : 'Generico'),
@@ -501,12 +463,10 @@ const App: React.FC = () => {
                         }
                     });
                 }
-
                 if (validCount === 0) {
                     alert("Il file non contiene nessun post valido da importare.");
                     return;
                 }
-
                 setImportPreview({
                     type: isCsv ? 'csv' : 'json',
                     total: totalRecords,
@@ -514,26 +474,19 @@ const App: React.FC = () => {
                     invalid: invalidCount,
                     data: sanitizedPosts
                 });
-
             } catch (error) {
                 console.error("Errore generico importazione:", error);
                 alert("Si è verificato un errore imprevisto durante la lettura del file.");
             } finally {
-                // Reset del valore dell'input per permettere di riselezionare lo stesso file
                 if (event.target) event.target.value = '';
             }
         };
-
         if (isCsv) {
-            // FIX ENCODING: Usiamo Windows-1252 (ANSI) per i CSV perché Excel salva così di default
-            // Questo risolve il problema delle lettere accentate che appaiono come simboli strani ()
             reader.readAsText(file, 'windows-1252');
         } else {
-            // Per JSON usiamo UTF-8 standard
             reader.readAsText(file);
         }
-        
-    }, [socialChannels, teamMembers]); // Aggiunto teamMembers alle dipendenze
+    }, [socialChannels, teamMembers]);
 
     const confirmImport = async () => {
         if (importPreview && importPreview.data) {
@@ -562,15 +515,12 @@ const App: React.FC = () => {
     const eventPropGetter = useCallback((event: CalendarEvent) => {
         const channel = socialChannels.find(c => c.name === event.social);
         const channelColor = channel ? channel.color : '#6B7280'; 
-        
         const style = {
             borderLeftColor: channelColor, 
         };
-        
         return { style, className: 'custom-calendar-event' };
     }, [socialChannels]);
 
-    // ... CustomEvent, CustomAgendaEvent, CustomWeekHeader, CustomMonthDateHeader ...
     const CustomEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => {
         const statusColor = STATUS_COLORS[event.status];
         const assignee = teamMembers.find(m => m.id === event.assignedTo);
@@ -593,7 +543,6 @@ const App: React.FC = () => {
                         {event.title || '(Senza titolo)'}
                      </div>
                 </div>
-                
                 <div className="event-avatar mt-auto pt-1 flex items-center justify-between border-t border-gray-100 dark:border-gray-700">
                     <span className="text-[10px] text-gray-500 capitalize truncate max-w-[70%]">{event.postType}</span>
                     {assignee && (
@@ -651,15 +600,12 @@ const App: React.FC = () => {
         );
     };
     
-    // CUSTOM WEEK HEADER AGGIORNATO: Conta solo i post filtrati
     const CustomWeekHeader: React.FC<HeaderProps> = ({ date, localizer }) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
-        // Usa isPostVisible per garantire che il conteggio rispetti i filtri
         const count = posts.filter(p => 
             moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
         ).length;
-
         return (
             <div className="flex flex-col items-center justify-center py-1 w-full">
                 <span className="text-sm font-semibold capitalize">{localizer.format(date, 'ddd DD/MM')}</span>
@@ -670,19 +616,13 @@ const App: React.FC = () => {
         );
     };
     
-    // CUSTOM MONTH DATE HEADER AGGIORNATO: Conta solo i post filtrati
     const CustomMonthDateHeader: React.FC<DateHeaderProps> = ({ date, label }) => {
         const dayStart = moment(date).startOf('day');
         const dayEnd = moment(date).endOf('day');
-        
-        // Filtra i post del giorno corrente
         const postsForDay = posts.filter(p => 
             moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
         );
-        
         const count = postsForDay.length;
-        // Rimosso il calcolo di publishedCount che non serve più
-
         return (
             <div className="flex flex-col items-start p-1 w-full relative" style={{ minHeight: '30px' }}>
                 <span className="text-sm font-semibold mb-1">{label}</span>
@@ -708,7 +648,6 @@ const App: React.FC = () => {
         return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">Caricamento...</div>;
     }
 
-    // AUTH FLOW RENDERING
     if (!user) {
         return <LoginScreen />;
     }
@@ -724,19 +663,7 @@ const App: React.FC = () => {
                     <p className="text-gray-600 dark:text-gray-300 mb-6">
                         L'account Google <span className="font-bold text-gray-900 dark:text-white">{user.email}</span> non è nella whitelist.
                     </p>
-                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg mb-6 text-sm text-left">
-                        <p className="font-semibold mb-1">Nota:</p>
-                        <ul className="list-disc list-inside text-gray-500 dark:text-gray-400 space-y-1">
-                            <li>Se sei un amministratore, usa l'accesso con Email e Password.</li>
-                            <li>Se devi usare Google, chiedi di essere aggiunto alla whitelist.</li>
-                        </ul>
-                    </div>
-                    <button 
-                        onClick={handleLogout}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg"
-                    >
-                        Esci e cambia account
-                    </button>
+                    <button onClick={handleLogout} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-lg">Esci e cambia account</button>
                 </div>
             </div>
         );
@@ -750,20 +677,11 @@ const App: React.FC = () => {
                     <p className="mt-4 font-semibold text-blue-600 dark:text-blue-400">Caricamento dati completi...</p>
                 </div>
             )}
-
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-center mb-2">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                        Loggato come: <span className="font-semibold text-blue-600 dark:text-blue-400">{user.email}</span>
-                    </div>
-                    <button 
-                        onClick={handleLogout}
-                        className="text-xs px-3 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
-                    >
-                        Esci
-                    </button>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Loggato come: <span className="font-semibold text-blue-600 dark:text-blue-400">{user.email}</span></div>
+                    <button onClick={handleLogout} className="text-xs px-3 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors">Esci</button>
                 </div>
-
                 <CalendarHeader 
                     onAddPost={() => handleSelectSlot({ start: new Date() })}
                     onShowReports={handleShowReports}
@@ -782,165 +700,48 @@ const App: React.FC = () => {
                     onNotificationClick={handleNotificationClick}
                     onShowChangelog={() => setIsChangelogModalOpen(true)}
                 />
-                
                 <StatusLegend />
-                
                 <div className="bg-white dark:bg-gray-800 p-4 pb-10 rounded-lg shadow-lg" style={{ height: 'calc(100vh - 240px)' }}>
                     <Calendar
-                        localizer={localizer}
-                        culture='it'
-                        events={filteredEvents}
-                        startAccessor="start"
-                        endAccessor="end"
-                        view={view}
-                        onView={setView}
-                        date={date}
-                        onNavigate={setDate}
-                        views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
-                        selectable
-                        scrollToTime={defaultScrollTime}
-                        onSelectSlot={handleSelectSlot}
-                        onSelectEvent={handleSelectEvent}
-                        eventPropGetter={eventPropGetter}
-                        messages={calendarMessages}
-                        formats={calendarFormats}
-                        popup={false} 
-                        onDrillDown={handleDrillDown}
-                        onShowMore={handleShowMore} 
-                        dayLayoutAlgorithm="no-overlap" 
+                        localizer={localizer} culture='it' events={filteredEvents} startAccessor="start" endAccessor="end" view={view} onView={setView} date={date} onNavigate={setDate} views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]} selectable scrollToTime={defaultScrollTime} onSelectSlot={handleSelectSlot} onSelectEvent={handleSelectEvent} eventPropGetter={eventPropGetter} messages={calendarMessages} formats={calendarFormats} popup={false} onDrillDown={handleDrillDown} onShowMore={handleShowMore} dayLayoutAlgorithm="no-overlap" 
                         components={{
                             event: CustomEvent,
-                            agenda: {
-                                event: CustomAgendaEvent,
-                            },
+                            agenda: { event: CustomAgendaEvent },
                             toolbar: (props: ToolbarProps) => <CustomToolbar {...props} />,
-                            week: {
-                                header: CustomWeekHeader
-                            },
-                            month: {
-                                dateHeader: CustomMonthDateHeader
-                            }
+                            week: { header: CustomWeekHeader },
+                            month: { dateHeader: CustomMonthDateHeader }
                         }}
                     />
                 </div>
             </div>
-
-            {/* --- WRAPPING MODALS IN SUSPENSE PER LAZY LOADING --- */}
             <Suspense fallback={null}>
                 {isPostModalOpen && selectedEvent && (
-                    <PostModal
-                        isOpen={isPostModalOpen}
-                        post={selectedEvent}
-                        socialChannels={socialChannels}
-                        teamMembers={teamMembers}
-                        onClose={closePostModal}
-                        onSave={handleSavePost}
-                        onDelete={handleDeletePost}
-                    />
+                    <PostModal isOpen={isPostModalOpen} post={selectedEvent} socialChannels={socialChannels} teamMembers={teamMembers} onClose={closePostModal} onSave={handleSavePost} onDelete={handleDeletePost} />
                 )}
-                
                 {isReportsModalOpen && (
-                    <ReportsModal
-                        isOpen={isReportsModalOpen}
-                        onClose={() => setIsReportsModalOpen(false)}
-                        posts={reportPosts} 
-                        channels={socialChannels}
-                        teamMembers={teamMembers} 
-                    />
+                    <ReportsModal isOpen={isReportsModalOpen} onClose={() => setIsReportsModalOpen(false)} posts={reportPosts} channels={socialChannels} teamMembers={teamMembers} />
                 )}
-                
                 {isChannelsModalOpen && (
-                    <SocialChannelsModal
-                        isOpen={isChannelsModalOpen}
-                        onClose={() => setIsChannelsModalOpen(false)}
-                        channels={socialChannels}
-                        posts={posts}
-                        onSave={handleSaveChannels}
-                    />
+                    <SocialChannelsModal isOpen={isChannelsModalOpen} onClose={() => setIsChannelsModalOpen(false)} channels={socialChannels} posts={posts} onSave={handleSaveChannels} />
                 )}
-
                 {isTeamModalOpen && (
-                    <TeamMembersModal
-                        isOpen={isTeamModalOpen}
-                        onClose={() => setIsTeamModalOpen(false)}
-                        teamMembers={teamMembers}
-                        posts={posts}
-                        onSave={handleSaveTeam}
-                    />
+                    <TeamMembersModal isOpen={isTeamModalOpen} onClose={() => setIsTeamModalOpen(false)} teamMembers={teamMembers} posts={posts} onSave={handleSaveTeam} />
                 )}
-
                 {isChangelogModalOpen && (
-                    <ChangelogModal 
-                        isOpen={isChangelogModalOpen}
-                        onClose={() => setIsChangelogModalOpen(false)}
-                    />
+                    <ChangelogModal isOpen={isChangelogModalOpen} onClose={() => setIsChangelogModalOpen(false)} />
                 )}
-                
                 {dayModalData.isOpen && (
-                    <DayDetailsModal
-                        isOpen={dayModalData.isOpen}
-                        onClose={() => setDayModalData(prev => ({ ...prev, isOpen: false }))}
-                        date={dayModalData.date}
-                        posts={dayModalData.posts}
-                        teamMembers={teamMembers}
-                        channels={socialChannels}
-                        onEditPost={(post) => {
-                            setSelectedEvent(post);
-                            setIsPostModalOpen(true);
-                        }}
-                    />
+                    <DayDetailsModal isOpen={dayModalData.isOpen} onClose={() => setDayModalData(prev => ({ ...prev, isOpen: false }))} date={dayModalData.date} posts={dayModalData.posts} teamMembers={teamMembers} channels={socialChannels} onEditPost={(post) => { setSelectedEvent(post); setIsPostModalOpen(true); }} />
                 )}
             </Suspense>
-
             {importPreview && (
                 <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-md">
-                        <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-4 mx-auto ${importPreview.type === 'csv' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                             {importPreview.type === 'csv' 
-                                ? <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                                : <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                             }
-                        </div>
-                        <h3 className="text-xl font-bold text-center text-gray-900 dark:text-white mb-2">
-                            {importPreview.type === 'csv' ? 'Conferma Importazione CSV' : 'Conferma Ripristino Backup'}
-                        </h3>
-                        <p className="text-center text-gray-500 dark:text-gray-400 mb-6 text-sm">
-                            {importPreview.type === 'csv' 
-                                ? 'Hai selezionato un file CSV. Ecco i post che verranno aggiunti:' 
-                                : 'Hai selezionato un backup JSON. Ecco cosa contiene:'}
-                        </p>
-                        
-                        <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 mb-6 space-y-2">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600 dark:text-gray-300">Totale Record:</span>
-                                <span className="font-bold">{importPreview.total}</span>
-                            </div>
-                            <div className="flex justify-between text-green-600 dark:text-green-400">
-                                <span>Pronti all'importazione:</span>
-                                <span className="font-bold">{importPreview.valid}</span>
-                            </div>
-                        </div>
-
-                        <div className={`p-3 border rounded-lg text-sm mb-6 ${importPreview.type === 'csv' ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700 text-blue-800 dark:text-blue-200' : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700 text-red-800 dark:text-red-200'}`}>
-                             {importPreview.type === 'csv' 
-                                ? <span>ℹ️ <strong>NOTA:</strong> Questi post verranno <strong>aggiunti</strong> a quelli esistenti. Nessun dato verrà cancellato.</span>
-                                : <span>⚠️ <strong>ATTENZIONE:</strong> Procedendo, cancellerai tutti i dati presenti nel cloud e li sostituirai con questo backup.</span>
-                             }
-                        </div>
-
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-md text-center">
+                        <h3 className="text-xl font-bold mb-2">Conferma Importazione</h3>
+                        <p className="text-sm text-gray-500 mb-6">Record pronti: {importPreview.valid}</p>
                         <div className="flex gap-3">
-                            <button 
-                                onClick={cancelImport}
-                                className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg text-gray-800 dark:text-white transition-colors"
-                            >
-                                Annulla
-                            </button>
-                            <button 
-                                onClick={confirmImport}
-                                className={`flex-1 px-4 py-2 rounded-lg text-white font-semibold transition-colors shadow-lg ${importPreview.type === 'csv' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}
-                            >
-                                {importPreview.type === 'csv' ? 'Aggiungi Post' : 'Sovrascrivi Dati'}
-                            </button>
+                            <button onClick={cancelImport} className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg text-gray-800 dark:text-white transition-colors">Annulla</button>
+                            <button onClick={confirmImport} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold transition-colors shadow-lg">Conferma</button>
                         </div>
                     </div>
                 </div>

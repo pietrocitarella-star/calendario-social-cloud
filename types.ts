@@ -19,6 +19,7 @@ export enum PostStatus {
   Scheduled = 'programmato',
   Published = 'pubblicato',
   Cancelled = 'cancellato',
+  Collaboration = 'collaborazione', // Aggiunto qui
 }
 
 export enum PostType {
@@ -28,7 +29,6 @@ export enum PostType {
   Reel = 'reel',
   Story = 'storia',
   Update = 'aggiornamento',
-  Collaboration = 'collaborazione',
   Repost = 'repost',
 }
 

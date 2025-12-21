@@ -1,5 +1,5 @@
 
-import { Post, SocialChannel, PostVersion, TeamMember } from '../types';
+import { Post, SocialChannel, PostVersion, TeamMember, PostStatus, PostType } from '../types';
 import { db } from '../firebaseConfig';
 import { 
     collection, 
@@ -27,21 +27,50 @@ const handleError = (action: string, error: any) => {
     alert(`Si è verificato un errore durante l'operazione: ${action}. Controlla la console o la connessione.`);
 };
 
+// --- MIGRATION LOGIC ---
+
+/**
+ * Funzione per migrare i dati: sposta "Collaborazione" da tipo a stato.
+ * Viene chiamata all'avvio se necessario.
+ */
+export const migrateCollaborationData = async () => {
+    try {
+        // Cerchiamo tutti i post che hanno ancora il postType impostato come "collaborazione" 
+        // (che ora non esiste più nell'enum tecnico ma potrebbe essere nel DB)
+        const q = query(collection(db, POSTS_COLLECTION), where('postType', '==', 'collaborazione'));
+        const snapshot = await getDocs(q);
+        
+        if (snapshot.empty) return;
+
+        console.log(`Migrazione in corso: rilevati ${snapshot.size} post da aggiornare...`);
+        const batch = writeBatch(db);
+        
+        snapshot.forEach((document) => {
+            const postRef = doc(db, POSTS_COLLECTION, document.id);
+            batch.update(postRef, {
+                status: PostStatus.Collaboration,
+                postType: PostType.Post // Resettiamo a tipo generico
+            });
+        });
+
+        await batch.commit();
+        console.log("Migrazione completata con successo.");
+    } catch (e) {
+        console.error("Errore durante la migrazione dei dati:", e);
+    }
+};
+
 // --- POSTS MANAGEMENT ---
 
-// OTTIMIZZAZIONE: Sottoscrizione filtrata per data
-// Accetta start e end (stringhe ISO YYYY-MM-DD...) per scaricare solo il necessario
 export const subscribeToPosts = (
     startDate: string, 
     endDate: string, 
     callback: (posts: Post[]) => void
 ) => {
-    // Nota: Le date sono stringhe ISO, quindi il confronto lessicografico funziona
     const q = query(
         collection(db, POSTS_COLLECTION),
         where('date', '>=', startDate),
         where('date', '<=', endDate)
-        // Nota: Firestore potrebbe richiedere un indice composto per date + altri filtri se aggiunti in futuro
     );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -57,8 +86,6 @@ export const subscribeToPosts = (
     return unsubscribe;
 };
 
-// NUOVA FUNZIONE: Fetch one-shot per Export e Report
-// Scarica tutti i post (o filtrati per un range ampio) senza sottoscrizione real-time
 export const fetchAllPosts = async (startDate?: string): Promise<Post[]> => {
     try {
         let q;
@@ -80,7 +107,6 @@ export const fetchAllPosts = async (startDate?: string): Promise<Post[]> => {
     }
 };
 
-// Aggiungi un nuovo post
 export const addPost = async (post: Omit<Post, 'id'>): Promise<Post> => {
     try {
         const sanitizedPost = Object.fromEntries(
@@ -98,7 +124,6 @@ export const addPost = async (post: Omit<Post, 'id'>): Promise<Post> => {
     }
 };
 
-// Aggiorna un post esistente
 export const updatePost = async (id: string, updatedData: Partial<Post>): Promise<void> => {
     try {
         const postRef = doc(db, POSTS_COLLECTION, id);
@@ -112,7 +137,6 @@ export const updatePost = async (id: string, updatedData: Partial<Post>): Promis
     }
 };
 
-// Salva post con cronologia
 export const savePostWithHistory = async (id: string, currentPost: Post, changes: Partial<Post>): Promise<void> => {
     try {
         const postRef = doc(db, POSTS_COLLECTION, id);
@@ -124,8 +148,6 @@ export const savePostWithHistory = async (id: string, currentPost: Post, changes
         };
 
         const newHistory = [...(history || []), versionSnapshot];
-        
-        // Mantieni solo le ultime 10 versioni per risparmiare spazio e banda
         if (newHistory.length > 10) newHistory.shift();
 
         const sanitizedChanges = Object.fromEntries(
@@ -142,7 +164,6 @@ export const savePostWithHistory = async (id: string, currentPost: Post, changes
     }
 };
 
-// Elimina un post
 export const deletePost = async (id: string): Promise<void> => {
     try {
         await deleteDoc(doc(db, POSTS_COLLECTION, id));
@@ -152,12 +173,8 @@ export const deletePost = async (id: string): Promise<void> => {
     }
 };
 
-// Importazione massiva
 export const savePostsToStorage = async (newPosts: Post[]) => {
     try {
-        const batch = writeBatch(db);
-        
-        // Limitiamo il batch a blocchi sicuri
         const chunks = [];
         for (let i = 0; i < newPosts.length; i += 400) {
             chunks.push(newPosts.slice(i, i + 400));
@@ -209,7 +226,6 @@ export const subscribeToChannels = (callback: (channels: SocialChannel[]) => voi
         });
 
         if (channels.length === 0) {
-            console.log("Nessun canale trovato. Inizializzazione canali di default...");
             await initializeDefaultChannels();
         } else {
             callback(channels);
