@@ -9,6 +9,17 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.0.0',
+        date: '10/11/2025',
+        changes: [
+            'Performance Estrema: Abilitata la cache offline (Persistence) per caricamenti istantanei e ridotto il peso iniziale dell\'app tramite Lazy Loading delle modali.',
+            'Rifacimento Collaborazioni: Lo stato "Collaborazione" è ora uno stato ufficiale (non più un tipo). Questo permette di mantenere il tipo di contenuto reale (es. Reel o Video) pur marcando il post come collaborazione commerciale.',
+            'Migrazione Dati Automatica: Implementato uno script di migrazione che all\'avvio converte i vecchi post "tipo collaborazione" nel nuovo formato stato senza perdita di informazioni.',
+            'Filtri Report Avanzati: Introdotta una barra di ricerca real-time globale nei report, selettore rapido dell\'anno e pulsantiera per i 12 mesi per analisi ultra-veloci.',
+            'Ottimizzazione Rendering: Sostituiti cicli di calcolo ridondanti con memoizzazione (useMemo) per una fluidità superiore durante lo scrolling del calendario.'
+        ]
+    },
+    {
         version: '1.9.7',
         date: '09/11/2025',
         changes: [
@@ -33,7 +44,7 @@ const changelogData: ChangeLogEntry[] = [
         changes: [
             'Migliorata Vista Mese: Cliccando su "+ N altri" si apre ora una finestra dedicata con la lista completa dei post del giorno in stile Agenda (invece di cambiare vista).',
             'KPI Avanzati: Aggiunto indicatore "Post Pubblicati (Netto)" nei report, che esclude automaticamente WhatsApp, Telegram e le Collaborazioni dal conteggio totale.',
-            'Refactoring UX: Migliorata la leggibilità delle liste popup.'
+            'Refactoring UX: Migliorata la leggibilità delle lise popup.'
         ]
     },
     {
@@ -65,14 +76,6 @@ const changelogData: ChangeLogEntry[] = [
         ]
     },
     {
-        version: '1.7.6',
-        date: '04/11/2025',
-        changes: [
-            'Fix Stabilità: Risolto bug che faceva sparire il link "+ Altri" cambiando vista.',
-            'Vista Settimanale: Layout ottimizzato per colonne strette, con altezza bilanciata e testo che va a capo.'
-        ]
-    },
-    {
         version: '1.7.5',
         date: '04/11/2025',
         changes: [
@@ -80,93 +83,6 @@ const changelogData: ChangeLogEntry[] = [
             'Layout Spazioso: Aumentata notevolmente l\'altezza delle righe orarie per una migliore leggibilità.',
             'Fix Mese: Il link "+ Altri" ora è sempre visibile e in primo piano.',
             'Design Adattivo: Le card degli eventi cambiano stile in base alla vista (Compatte nel Mese, Dettagliate nel Giorno).'
-        ]
-    },
-    {
-        version: '1.7.4',
-        date: '03/11/2025',
-        changes: [
-            'Fix Critico: Risolto problema del pulsante "+ altri" che non appariva nella vista mensile.',
-            'Design: Card degli eventi ridisegnate per essere più leggibili e compatte.',
-            'Visualizzazione: Badge social più evidenti e separazione gerarchica delle informazioni.'
-        ]
-    },
-    {
-        version: '1.7.3',
-        date: '03/11/2025',
-        changes: [
-            'Visual Improvement: Le etichette dei canali social nelle card sono ora colorate (Badge) per un riconoscimento immediato.',
-            'Fix: Risolto problema di visibilità del pulsante "+ altri" nella vista mensile.'
-        ]
-    },
-    {
-        version: '1.7.2',
-        date: '02/11/2025',
-        changes: [
-            'Design Refresh: Nuovo stile "Minimal" per le card del calendario.',
-            'Migliorata leggibilità: rimosso il colore di sfondo pieno dagli eventi.',
-            'UX: Ordinamento alfabetico automatico dei Tipi di Contenuto.',
-            'Vista Giorno/Settimana: aumentata l\'altezza delle righe orarie per una lettura più chiara.'
-        ]
-    },
-    {
-        version: '1.7.1',
-        date: '02/11/2025',
-        changes: [
-            'Aggiunto tipo di contenuto "Collaborazione".',
-            'Automazione Intelligente: selezionando YouTube, il tipo contenuto diventa automaticamente "Video".'
-        ]
-    },
-    {
-        version: '1.7.0',
-        date: '01/11/2025',
-        changes: [
-            'Nuova funzionalità "Team": gestisci collaboratori e colleghi.',
-            'Assegnazione Post: assegna task specifici ai membri del team.',
-            'Visualizzazione Avatar: le iniziali del collaboratore appaiono sul post nel calendario.',
-            'Miglioramento Privacy: aggiunto tag "noindex" per nascondere l\'app ai motori di ricerca.'
-        ]
-    },
-    {
-        version: '1.5.0',
-        date: '30/10/2025',
-        changes: [
-            'Aggiunto editor Markdown per le note (Grassetto, Corsivo, Liste).',
-            'Introdotta modalità "Scrivi" e "Anteprima" nel dettaglio post.',
-            'Aggiunta validazione automatica per i link esterni.',
-            'Migliorata l\'interfaccia di formattazione con toolbar dedicata.',
-            'Risolto bug importazione JSON con nuova procedura sicura.'
-        ]
-    },
-    {
-        version: '1.4.0',
-        date: '28/10/2025',
-        changes: [
-            'Nuova sezione Reportistica avanzata.',
-            'Esportazione dati in CSV ed Excel.',
-            'Stampa PDF dei report.',
-            'Grafici interattivi (Barre e Ciambella) per canali e stati.',
-            'Sistema di notifiche per scadenze e approvazioni.'
-        ]
-    },
-    {
-        version: '1.3.0',
-        date: '25/10/2025',
-        changes: [
-            'Introdotta cronologia versioni dei singoli post.',
-            'Funzionalità di ripristino versioni precedenti.',
-            'Duplicazione rapida dei post.',
-            'Ricerca testuale globale nel calendario.'
-        ]
-    },
-    {
-        version: '1.2.0',
-        date: '20/10/2025',
-        changes: [
-            'Filtri rapidi per canale social nel calendario.',
-            'Visualizzazione "Popup" per giorni con molti post.',
-            'Migliorata UX per eliminazione post con conferma.',
-            'Traduzione completa in Italiano.'
         ]
     },
     {

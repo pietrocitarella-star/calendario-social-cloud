@@ -183,13 +183,16 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     const filteredPosts = useMemo(() => {
         let result = posts;
         const now = moment();
+        
         if (timeRange === 'CUSTOM') {
             if (customStartDate && customEndDate) {
-                const start = moment(customStartDate).startOf('day'); const end = moment(customEndDate).endOf('day');
+                const start = moment(customStartDate).startOf('day'); 
+                const end = moment(customEndDate).endOf('day');
                 result = result.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
             }
         } else if (timeRange === 'YEAR') {
-            const start = moment().year(selectedYear).startOf('year'); const end = moment().year(selectedYear).endOf('year');
+            const start = moment().year(selectedYear).startOf('year'); 
+            const end = moment().year(selectedYear).endOf('year');
             result = result.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
         } else if (timeRange !== 'ALL') {
             const rangeMap: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1A': 12 };
@@ -198,12 +201,24 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                  result = result.filter(p => moment(p.date).isAfter(cutoff));
             }
         }
+
+        // RICERCA TESTUALE GLOBALE
         if (searchTerm.trim()) {
             const lowerTerm = searchTerm.toLowerCase();
-            result = result.filter(p => p.title.toLowerCase().includes(lowerTerm) || p.social.toLowerCase().includes(lowerTerm) || p.postType.toLowerCase().includes(lowerTerm) || p.status.toLowerCase().includes(lowerTerm) || (p.notes && p.notes.toLowerCase().includes(lowerTerm)));
+            result = result.filter(p => {
+                const member = teamMembers.find(m => m.id === p.assignedTo);
+                return (
+                    p.title.toLowerCase().includes(lowerTerm) || 
+                    p.social.toLowerCase().includes(lowerTerm) || 
+                    p.postType.toLowerCase().includes(lowerTerm) || 
+                    p.status.toLowerCase().includes(lowerTerm) || 
+                    (p.notes && p.notes.toLowerCase().includes(lowerTerm)) ||
+                    (member && member.name.toLowerCase().includes(lowerTerm))
+                );
+            });
         }
         return result;
-    }, [posts, timeRange, searchTerm, customStartDate, customEndDate, selectedYear]);
+    }, [posts, timeRange, searchTerm, customStartDate, customEndDate, selectedYear, teamMembers]);
 
     const stats = useMemo(() => {
         const totalPosts = filteredPosts.length;
@@ -212,8 +227,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         const drafts = filteredPosts.filter(p => p.status === PostStatus.Draft).length;
         const collaborations = filteredPosts.filter(p => p.status === PostStatus.Collaboration).length;
 
-        // NUOVA LOGICA: Netto include solo Published (escludendo canali TG/WA)
-        // Collaborazioni ora sono uno stato a parte, quindi sono già escluse dal conteggio "Published"
         const netPublished = filteredPosts.filter(p => {
             if (p.status !== PostStatus.Published) return false;
             const isExcludedChannel = p.social === 'Telegram' || p.social === 'WhatsApp';
@@ -287,32 +300,119 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             </div>
                         </div>
                     </div>
-                    <div id="reports-modal-content-body" className="p-6 overflow-y-auto flex-grow space-y-6 bg-gray-50 dark:bg-gray-900/50">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <KPICard title="Totale" value={stats.totalPosts} icon={<span className="text-2xl">📝</span>} />
-                            <KPICard title="Pubblicati" value={stats.published} colorClass="text-green-600 dark:text-green-400" icon={<span className="text-2xl">✅</span>} />
-                            <KPICard title="Collaborazioni" value={stats.collaborations} colorClass="text-fuchsia-600 dark:text-fuchsia-400" icon={<span className="text-2xl">🤝</span>} />
-                            <KPICard title="Programmati" value={stats.scheduled} colorClass="text-blue-600 dark:text-blue-400" icon={<span className="text-2xl">📅</span>} />
+                    
+                    <div className="p-6 overflow-y-auto flex-grow space-y-6 bg-gray-50 dark:bg-gray-900/50">
+                        {/* BARRA FILTRI E RICERCA */}
+                        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 space-y-4 no-print">
+                            <div className="flex flex-col xl:flex-row gap-4">
+                                {/* Ricerca Testuale */}
+                                <div className="flex-grow">
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Cerca nel report</label>
+                                    <div className="relative">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Cerca per titolo, social, membro, note..." 
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <svg className="w-5 h-5 absolute left-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                    </div>
+                                </div>
+                                
+                                {/* Preset Temporali */}
+                                <div className="xl:w-48">
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Intervallo Predefinito</label>
+                                    <select 
+                                        value={timeRange} 
+                                        onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+                                        className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        {Object.entries(RANGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                                    </select>
+                                </div>
+
+                                {/* Date Personalizzate */}
+                                <div className="flex gap-2 xl:w-80">
+                                    <div className="flex-grow">
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Dal</label>
+                                        <input type="date" value={customStartDate} onChange={(e) => { setCustomStartDate(e.target.value); setTimeRange('CUSTOM'); }} className="w-full px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-xs" />
+                                    </div>
+                                    <div className="flex-grow">
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Al</label>
+                                        <input type="date" value={customEndDate} onChange={(e) => { setCustomEndDate(e.target.value); setTimeRange('CUSTOM'); }} className="w-full px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-xs" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* CONTROLLI RAPIDI ANNO E MESI */}
+                            <div className="flex flex-col lg:flex-row gap-4 pt-2 border-t border-gray-50 dark:border-gray-700">
+                                {/* Navigazione Anno */}
+                                <div className="flex items-center gap-3 bg-gray-100 dark:bg-gray-700 p-1.5 rounded-lg w-fit">
+                                    <button onClick={() => handleYearChange(-1)} className="p-1 hover:bg-white dark:hover:bg-gray-600 rounded transition-colors text-gray-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg></button>
+                                    <span className="font-bold text-gray-700 dark:text-gray-200 px-2">{selectedYear}</span>
+                                    <button onClick={() => handleYearChange(1)} className="p-1 hover:bg-white dark:hover:bg-gray-600 rounded transition-colors text-gray-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg></button>
+                                </div>
+
+                                {/* Griglia Mesi */}
+                                <div className="flex-grow flex flex-wrap gap-1.5">
+                                    <button 
+                                        onClick={handleYearPreset}
+                                        className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase transition-all ${timeRange === 'CUSTOM' && moment(customStartDate).isSame(moment().year(selectedYear).startOf('year'), 'day') && moment(customEndDate).isSame(moment().year(selectedYear).endOf('year'), 'day') ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400' : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                    >
+                                        Intero Anno
+                                    </button>
+                                    <div className="w-px h-6 bg-gray-200 dark:bg-gray-600 mx-1 hidden sm:block"></div>
+                                    {months.map((m, i) => (
+                                        <button
+                                            key={m}
+                                            onClick={() => handleMonthPreset(i)}
+                                            className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase transition-all ${timeRange === 'CUSTOM' && moment(customStartDate).month() === i && moment(customStartDate).year() === selectedYear ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                                        >
+                                            {m}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <KPICard title="Post Pubblicati (Netto)" value={stats.netPublished} colorClass="text-violet-700 dark:text-violet-300 text-3xl" className="ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-900/20 transform scale-105 z-10 shadow-lg border-transparent" icon={<span className="text-3xl">🎯</span>} subtext="Esclusi: TG, WA, Collaborazioni (già separate)" />
-                        </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
-                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Stato</h3><ChartToggle current={chartPrefs.status} onChange={(t) => setChartPrefs(prev => ({...prev, status: t}))} /></div>
-                                <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.status === 'donut' ? <DonutChart data={stats.statusData} /> : <ProgressBarChart data={stats.statusData} />}</div>
+
+                        {/* RISULTATI FILTRATI */}
+                        <div id="reports-modal-content-body" className="space-y-6">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <KPICard title="Totale" value={stats.totalPosts} icon={<span className="text-2xl">📝</span>} />
+                                <KPICard title="Pubblicati" value={stats.published} colorClass="text-green-600 dark:text-green-400" icon={<span className="text-2xl">✅</span>} />
+                                <KPICard title="Collaborazioni" value={stats.collaborations} colorClass="text-fuchsia-600 dark:text-fuchsia-400" icon={<span className="text-2xl">🤝</span>} />
+                                <KPICard title="Programmati" value={stats.scheduled} colorClass="text-blue-600 dark:text-blue-400" icon={<span className="text-2xl">📅</span>} />
                             </div>
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
-                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Canali</h3><ChartToggle current={chartPrefs.channel} onChange={(t) => setChartPrefs(prev => ({...prev, channel: t}))} /></div>
-                                <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.channel === 'donut' ? <DonutChart data={stats.postsByChannel} /> : <ProgressBarChart data={stats.postsByChannel} />}</div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <KPICard 
+                                    title="Post Pubblicati (Netto)" 
+                                    value={stats.netPublished} 
+                                    colorClass="text-violet-700 dark:text-violet-300 text-3xl" 
+                                    className="ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-900/20 transform scale-105 z-10 shadow-lg border-transparent" 
+                                    icon={<span className="text-3xl">🎯</span>} 
+                                    subtext="Esclusi: TG, WA, Collaborazioni" 
+                                />
                             </div>
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
-                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Tipologia</h3><ChartToggle current={chartPrefs.type} onChange={(t) => setChartPrefs(prev => ({...prev, type: t}))} /></div>
-                                <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.type === 'donut' ? <DonutChart data={stats.postsByType} /> : <ProgressBarChart data={stats.postsByType} />}</div>
-                            </div>
-                            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
-                                <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Team</h3><ChartToggle current={chartPrefs.team} onChange={(t) => setChartPrefs(prev => ({...prev, team: t}))} /></div>
-                                <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.team === 'donut' ? <DonutChart data={stats.teamStats} /> : <ProgressBarChart data={stats.teamStats} />}</div>
+                            
+                            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                    <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Stato</h3><ChartToggle current={chartPrefs.status} onChange={(t) => setChartPrefs(prev => ({...prev, status: t}))} /></div>
+                                    <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.status === 'donut' ? <DonutChart data={stats.statusData} /> : <ProgressBarChart data={stats.statusData} />}</div>
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                    <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Canali</h3><ChartToggle current={chartPrefs.channel} onChange={(t) => setChartPrefs(prev => ({...prev, channel: t}))} /></div>
+                                    <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.channel === 'donut' ? <DonutChart data={stats.postsByChannel} /> : <ProgressBarChart data={stats.postsByChannel} />}</div>
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                    <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Tipologia</h3><ChartToggle current={chartPrefs.type} onChange={(t) => setChartPrefs(prev => ({...prev, type: t}))} /></div>
+                                    <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.type === 'donut' ? <DonutChart data={stats.postsByType} /> : <ProgressBarChart data={stats.postsByType} />}</div>
+                                </div>
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                    <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Team</h3><ChartToggle current={chartPrefs.team} onChange={(t) => setChartPrefs(prev => ({...prev, team: t}))} /></div>
+                                    <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.team === 'donut' ? <DonutChart data={stats.teamStats} /> : <ProgressBarChart data={stats.teamStats} />}</div>
+                                </div>
                             </div>
                         </div>
                     </div>
