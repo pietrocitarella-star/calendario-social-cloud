@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Post, SocialChannel, PostStatus, PostType, TeamMember } from '../types';
+import { STATUS_COLORS } from '../constants';
 import moment from 'moment';
 import 'moment/locale/it';
 
@@ -58,6 +59,8 @@ const TAILWIND_HEX_MAP: Record<string, string> = {
     'bg-violet-600': '#7c3aed',
     'bg-fuchsia-500': '#d946ef',
     'bg-fuchsia-600': '#c026d3',
+    'bg-slate-600': '#475569',
+    'bg-rose-500': '#f43f5e', // Aggiunto HEX per bg-rose-500
 };
 
 const resolveColor = (color: string) => {
@@ -112,11 +115,11 @@ const DonutChart: React.FC<{ data: { label: string; value: number; color: string
                     <span className="text-xs">Post</span>
                 </div>
             </div>
-            <div className="space-y-2 w-full max-w-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 w-full max-w-md">
                 {data.map((item, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
+                    <div key={i} className="flex items-center gap-2 text-[11px]">
                         <span className={`w-3 h-3 rounded-full flex-shrink-0 ${!item.color.startsWith('#') ? item.color : ''}`} style={{ backgroundColor: item.color.startsWith('#') ? item.color : undefined }}></span>
-                        <span className="text-gray-600 dark:text-gray-300 truncate flex-grow">{item.label}</span>
+                        <span className="text-gray-600 dark:text-gray-300 truncate flex-grow capitalize">{item.label}</span>
                         <span className="font-bold ml-auto text-gray-800 dark:text-white">{Math.round((item.value / total) * 100)}%</span>
                     </div>
                 ))}
@@ -202,7 +205,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
             }
         }
 
-        // RICERCA TESTUALE GLOBALE
         if (searchTerm.trim()) {
             const lowerTerm = searchTerm.toLowerCase();
             result = result.filter(p => {
@@ -243,14 +245,17 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
             label: type, value: count, color: TYPE_COLORS[index % TYPE_COLORS.length]
         })).sort((a, b) => b.value - a.value);
 
-        const statusData = [
-            { label: 'Pubblicati', value: published, color: 'bg-green-500' },
-            { label: 'Collaborazioni', value: collaborations, color: 'bg-fuchsia-600' },
-            { label: 'Programmati', value: scheduled, color: 'bg-blue-400' },
-            { label: 'In Bozze', value: drafts, color: 'bg-yellow-400' },
-            { label: 'Da Approvare', value: filteredPosts.filter(p => p.status === PostStatus.NeedsApproval).length, color: 'bg-orange-400' },
-            { label: 'Altri', value: totalPosts - published - collaborations - scheduled - drafts - filteredPosts.filter(p => p.status === PostStatus.NeedsApproval).length, color: 'bg-gray-400' },
-        ].filter(d => d.value > 0);
+        // MAPPA DINAMICA DI TUTTI GLI STATI
+        const statusData = Object.values(PostStatus).map(status => {
+            const count = filteredPosts.filter(p => p.status === status).length;
+            return {
+                label: status,
+                value: count,
+                color: STATUS_COLORS[status] || 'bg-gray-400'
+            };
+        })
+        .filter(d => d.value > 0)
+        .sort((a, b) => b.value - a.value);
 
         const teamPublishedCounts: Record<string, number> = {};
         filteredPosts.filter(p => (p.status === PostStatus.Published || p.status === PostStatus.Collaboration) && p.assignedTo).forEach(p => {
@@ -367,7 +372,14 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                                         <button
                                             key={m}
                                             onClick={() => handleMonthPreset(i)}
-                                            className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase transition-all ${timeRange === 'CUSTOM' && moment(customStartDate).month() === i && moment(customStartDate).year() === selectedYear ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                                            className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase transition-all ${
+                                                timeRange === 'CUSTOM' && 
+                                                moment(customStartDate).month() === i && 
+                                                moment(customEndDate).month() === i && // FIX: Controllo che anche la data fine sia nello stesso mese
+                                                moment(customStartDate).year() === selectedYear 
+                                                ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400' 
+                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                            }`}
                                         >
                                             {m}
                                         </button>

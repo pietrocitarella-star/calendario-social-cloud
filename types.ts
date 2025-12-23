@@ -18,8 +18,9 @@ export enum PostStatus {
   Waiting = 'in attesa',
   Scheduled = 'programmato',
   Published = 'pubblicato',
+  Sponsored = 'sponsorizzato', // Nuovo stato
   Cancelled = 'cancellato',
-  Collaboration = 'collaborazione', // Aggiunto qui
+  Collaboration = 'collaborazione',
 }
 
 export enum PostType {

@@ -18,6 +18,7 @@ export const STATUS_COLORS: Record<PostStatus, string> = {
     [PostStatus.Waiting]: 'bg-indigo-400',
     [PostStatus.Scheduled]: 'bg-blue-400',
     [PostStatus.Published]: 'bg-green-500',
+    [PostStatus.Sponsored]: 'bg-rose-500', // Colore Rose per sponsorizzati
     [PostStatus.Cancelled]: 'bg-slate-600',
-    [PostStatus.Collaboration]: 'bg-fuchsia-600', // Colore distintivo per collaborazioni
+    [PostStatus.Collaboration]: 'bg-fuchsia-600',
 };

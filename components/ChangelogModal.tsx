@@ -9,6 +9,29 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.1.2',
+        date: '12/11/2025',
+        changes: [
+             'Fix UI Report: Risolto un bug visivo dove selezionando "Intero Anno" veniva erroneamente evidenziato anche il pulsante "Gennaio". Ora l\'evidenziazione è esclusiva.',
+        ]
+    },
+    {
+        version: '2.1.1',
+        date: '12/11/2025',
+        changes: [
+             'Nuovo stato "Sponsorizzato": Aggiunta la possibilità di classificare i post come sponsorizzati (Ads/Paid) con colore distintivo (Rose).',
+        ]
+    },
+    {
+        version: '2.1.0',
+        date: '11/11/2025',
+        changes: [
+            'Navigazione Rapida: Sostituita l\'etichetta statica del calendario con menu a tendina interattivi per Mese e Anno. Ora puoi saltare direttamente a qualsiasi data (es. Gennaio 2026) senza dover scorrere mese per mese.',
+            'Report di Precisione: Eliminata la categoria generica "Altri" dai grafici. Ora vengono mostrati esplicitamente tutti gli stati (Non Iniziato, In Attesa, Cancellato) per una chiarezza analitica totale.',
+            'UX Agenda Migliorata: La navigazione rapida funziona anche nella vista Agenda, permettendo di cambiare il periodo di visualizzazione istantaneamente.'
+        ]
+    },
+    {
         version: '2.0.0',
         date: '10/11/2025',
         changes: [
