@@ -20,6 +20,7 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCopyFeedback, setShowCopyFeedback] = useState(false);
   
   // Edit vs Preview Mode for Notes
   const [noteMode, setNoteMode] = useState<'edit' | 'preview'>('edit');
@@ -71,6 +72,18 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
     }
     if (name === 'creativityLink') {
         setUrlErrors(prev => ({ ...prev, creativity: validateUrl(value) }));
+    }
+  };
+
+  const handleCopyTitle = async () => {
+    if (formData.title) {
+        try {
+            await navigator.clipboard.writeText(formData.title);
+            setShowCopyFeedback(true);
+            setTimeout(() => setShowCopyFeedback(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+        }
     }
   };
 
@@ -254,7 +267,30 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Titolo del post</label>
-            <input type="text" name="title" placeholder="Titolo del post" value={formData.title || ''} onChange={handleChange} className="mt-1 w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500" />
+            <div className="flex relative">
+                <input 
+                    type="text" 
+                    name="title" 
+                    placeholder="Titolo del post" 
+                    value={formData.title || ''} 
+                    onChange={handleChange} 
+                    className="mt-1 w-full p-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-blue-500 focus:border-blue-500" 
+                />
+                <button 
+                    type="button"
+                    onClick={handleCopyTitle}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-transparent rounded"
+                    title="Copia titolo"
+                >
+                    {showCopyFeedback ? (
+                        <span className="text-green-500 text-xs font-bold">Copiato!</span>
+                    ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                    )}
+                </button>
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

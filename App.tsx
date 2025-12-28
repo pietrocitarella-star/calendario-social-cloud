@@ -101,6 +101,7 @@ const App: React.FC = () => {
     
     const [searchTerm, setSearchTerm] = useState('');
     const [activeChannelFilters, setActiveChannelFilters] = useState<string[]>([]);
+    const [activeStatusFilters, setActiveStatusFilters] = useState<PostStatus[]>([]);
     
     const [view, setView] = useState(Views.MONTH);
     const [date, setDate] = useState(new Date());
@@ -127,6 +128,9 @@ const App: React.FC = () => {
         data: Post[];
     } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    // Ref per prevenire l'apertura del modale "Nuovo Post" quando si clicca sul bottone "Mostra Altri"
+    const interactionBlockerRef = useRef(false);
 
     const defaultScrollTime = useMemo(() => new Date(1970, 1, 1, 9, 0, 0), []);
 
@@ -178,7 +182,7 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
-    // EFFETTO MIGRAZIONE DATI: Eseguito una sola volta quando l'utente è autorizzato
+    // EFFETTO MIGRAZIONE DATI
     useEffect(() => {
         if (isAuthorized) {
             migrateCollaborationData();
@@ -285,8 +289,10 @@ const App: React.FC = () => {
         }
     }, [posts]);
 
+    // FILTER LOGIC
     const filteredEvents = useMemo(() => {
         let result = events;
+        // 1. Text Search
         if (searchTerm.trim()) {
             const lowerTerm = searchTerm.toLowerCase();
             result = result.filter(event => 
@@ -294,12 +300,40 @@ const App: React.FC = () => {
                 (event.notes && event.notes.toLowerCase().includes(lowerTerm))
             );
         }
+        // 2. Channel Filter
         if (activeChannelFilters.length > 0) {
             result = result.filter(event => activeChannelFilters.includes(event.social));
         }
+        // 3. Status Filter
+        if (activeStatusFilters.length > 0) {
+            result = result.filter(event => activeStatusFilters.includes(event.status));
+        }
         return result;
-    }, [events, searchTerm, activeChannelFilters]);
+    }, [events, searchTerm, activeChannelFilters, activeStatusFilters]);
     
+    // Status Counts Calculation (Dynamic based on Search and Channels only)
+    const statusCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        
+        // Base list for counting: Filtered by Search and Channels, but NOT by Status (so we see available counts)
+        let baseList = posts;
+        if (searchTerm.trim()) {
+            const lowerTerm = searchTerm.toLowerCase();
+            baseList = baseList.filter(p => 
+                p.title.toLowerCase().includes(lowerTerm) || 
+                (p.notes && p.notes.toLowerCase().includes(lowerTerm))
+            );
+        }
+        if (activeChannelFilters.length > 0) {
+            baseList = baseList.filter(p => activeChannelFilters.includes(p.social));
+        }
+
+        baseList.forEach(p => {
+            counts[p.status] = (counts[p.status] || 0) + 1;
+        });
+        return counts;
+    }, [posts, searchTerm, activeChannelFilters]);
+
     const toggleChannelFilter = useCallback((channelName: string) => {
         setActiveChannelFilters(prev => {
             if (prev.includes(channelName)) {
@@ -310,7 +344,23 @@ const App: React.FC = () => {
         });
     }, []);
 
+    const toggleStatusFilter = useCallback((status: PostStatus) => {
+        setActiveStatusFilters(prev => {
+            if (prev.includes(status)) {
+                return prev.filter(s => s !== status);
+            } else {
+                return [...prev, status];
+            }
+        });
+    }, []);
+
     const handleSelectSlot = useCallback(({ start }: { start: Date }) => {
+        // BUG FIX: Se è attivo il blocco interazione (perché abbiamo appena cliccato "mostra post"), usciamo.
+        if (interactionBlockerRef.current) {
+            interactionBlockerRef.current = false;
+            return;
+        }
+
         if (socialChannels.length === 0) {
             alert("Attendi il caricamento dei canali o aggiungine uno.");
             return;
@@ -334,9 +384,8 @@ const App: React.FC = () => {
     }, [posts]);
 
     const isPostVisible = useCallback((post: Post) => {
-        if (activeChannelFilters.length > 0 && !activeChannelFilters.includes(post.social)) {
-            return false;
-        }
+        if (activeChannelFilters.length > 0 && !activeChannelFilters.includes(post.social)) return false;
+        if (activeStatusFilters.length > 0 && !activeStatusFilters.includes(post.status)) return false;
         if (searchTerm.trim()) {
             const lowerTerm = searchTerm.toLowerCase();
             const matchesSearch = 
@@ -345,7 +394,7 @@ const App: React.FC = () => {
             if (!matchesSearch) return false;
         }
         return true;
-    }, [activeChannelFilters, searchTerm]);
+    }, [activeChannelFilters, activeStatusFilters, searchTerm]);
 
     const handleShowMore = useCallback((events: CalendarEvent[], date: Date) => {
         const dayStart = moment(date).startOf('day');
@@ -628,7 +677,15 @@ const App: React.FC = () => {
                 <span className="text-sm font-semibold mb-1">{label}</span>
                 {count > 0 && (
                     <button
-                        onClick={(e) => { e.stopPropagation(); handleShowMore([], date); }}
+                        onClick={(e) => { 
+                            e.stopPropagation(); 
+                            // Attiviamo il blocco interazione per evitare che scatti anche handleSelectSlot
+                            interactionBlockerRef.current = true;
+                            // Reset del blocco dopo un breve timeout, per sicurezza
+                            setTimeout(() => { interactionBlockerRef.current = false; }, 300);
+                            
+                            handleShowMore([], date); 
+                        }}
                         className="w-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 text-xs font-bold px-2 py-1 rounded shadow-sm hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors text-center z-50 relative pointer-events-auto"
                         style={{ marginTop: '2px' }}
                     >
@@ -699,6 +756,9 @@ const App: React.FC = () => {
                     notifications={notifications}
                     onNotificationClick={handleNotificationClick}
                     onShowChangelog={() => setIsChangelogModalOpen(true)}
+                    activeStatusFilters={activeStatusFilters}
+                    onToggleStatus={toggleStatusFilter}
+                    statusCounts={statusCounts}
                 />
                 <StatusLegend />
                 <div className="bg-white dark:bg-gray-800 p-4 pb-10 rounded-lg shadow-lg" style={{ height: 'calc(100vh - 240px)' }}>

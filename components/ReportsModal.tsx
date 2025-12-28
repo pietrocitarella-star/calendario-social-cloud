@@ -60,7 +60,7 @@ const TAILWIND_HEX_MAP: Record<string, string> = {
     'bg-fuchsia-500': '#d946ef',
     'bg-fuchsia-600': '#c026d3',
     'bg-slate-600': '#475569',
-    'bg-rose-500': '#f43f5e', // Aggiunto HEX per bg-rose-500
+    'bg-rose-500': '#f43f5e',
 };
 
 const resolveColor = (color: string) => {
@@ -85,6 +85,38 @@ const KPICard: React.FC<{
         {icon && <div className="opacity-80 flex-shrink-0 ml-2">{icon}</div>}
     </div>
 );
+
+const YearlyTrendChart: React.FC<{ data: number[], year: number }> = ({ data, year }) => {
+    const max = Math.max(...data, 1);
+    const months = moment.monthsShort();
+    
+    return (
+        <div className="w-full bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mt-6 page-break-inside-avoid">
+            <h3 className="font-bold text-gray-800 dark:text-white text-sm mb-6 flex items-center gap-2">
+                <span className="bg-blue-100 text-blue-700 p-1 rounded">📊</span> 
+                Andamento Mensile {year}
+            </h3>
+            <div className="flex items-end justify-between gap-2 h-48 w-full">
+                {data.map((value, index) => (
+                    <div key={index} className="flex flex-col items-center justify-end flex-1 h-full group">
+                        <div className="relative w-full flex justify-center items-end h-full">
+                             {value > 0 && (
+                                <span className="absolute -top-6 text-[10px] font-bold text-gray-500 dark:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {value}
+                                </span>
+                             )}
+                            <div 
+                                className={`w-full max-w-[30px] rounded-t-sm transition-all duration-500 ${value > 0 ? 'bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500' : 'bg-gray-100 dark:bg-gray-700 h-[2px]'}`}
+                                style={{ height: value > 0 ? `${(value / max) * 100}%` : '2px' }}
+                            ></div>
+                        </div>
+                        <span className="text-[10px] text-gray-400 mt-2 font-mono uppercase truncate w-full text-center">{months[index]}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 const DonutChart: React.FC<{ data: { label: string; value: number; color: string }[] }> = ({ data }) => {
     const total = data.reduce((acc, item) => acc + item.value, 0);
@@ -229,6 +261,8 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         const drafts = filteredPosts.filter(p => p.status === PostStatus.Draft).length;
         const collaborations = filteredPosts.filter(p => p.status === PostStatus.Collaboration).length;
 
+        const updatesCount = filteredPosts.filter(p => p.social === 'WhatsApp' || p.social === 'Telegram').length;
+
         const netPublished = filteredPosts.filter(p => {
             if (p.status !== PostStatus.Published) return false;
             const isExcludedChannel = p.social === 'Telegram' || p.social === 'WhatsApp';
@@ -266,8 +300,20 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
              return { label: member ? member.name : 'Utente rimosso', value: count, color: member ? member.color : '#9ca3af' };
         }).sort((a,b) => b.value - a.value);
 
-        return { totalPosts, published, scheduled, drafts, collaborations, netPublished, postsByChannel, postsByType, statusData, teamStats };
-    }, [filteredPosts, channels, teamMembers]);
+        // CALCOLO TREND ANNUALE (Sempre basato su selectedYear, indipendentemente dal filtro periodo)
+        const yearlyTrendData = Array(12).fill(0);
+        posts.forEach(p => {
+            const d = moment(p.date);
+            if (d.year() === selectedYear) {
+                yearlyTrendData[d.month()]++;
+            }
+        });
+
+        return { 
+            totalPosts, published, scheduled, drafts, collaborations, netPublished, updatesCount, 
+            postsByChannel, postsByType, statusData, teamStats, yearlyTrendData 
+        };
+    }, [filteredPosts, channels, teamMembers, posts, selectedYear]);
 
     const handlePrint = () => {
         const content = document.getElementById('reports-modal-content-body'); if (!content) return;
@@ -275,7 +321,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         document.body.appendChild(iframe); const doc = iframe.contentWindow?.document;
         if (doc) {
             doc.open(); doc.write(`
-                <html><head><title>Report Analitico</title><script src="https://cdn.tailwindcss.com"></script><style>body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: sans-serif; padding: 20px; } .no-print { display: none !important; } h2, h3, p, span, div { color: black !important; }</style></head>
+                <html><head><title>Report Analitico</title><script src="https://cdn.tailwindcss.com"></script><style>body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: sans-serif; padding: 20px; } .no-print { display: none !important; } h2, h3, p, span, div { color: black !important; } .page-break-inside-avoid { page-break-inside: avoid; }</style></head>
                 <body><div class="mb-6 border-b pb-4"><h1 class="text-3xl font-bold">Report Analitico</h1><p class="text-gray-600">Generato il ${moment().format('DD/MM/YYYY HH:mm')}<br/>Periodo: ${timeRange === 'CUSTOM' ? `${moment(customStartDate).format('DD/MM/YY')} - ${moment(customEndDate).format('DD/MM/YY')}` : RANGE_LABELS[timeRange]}</p></div><div id="print-body">${content.innerHTML}</div><script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script></body></html>`);
             doc.close();
         }
@@ -283,7 +329,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
 
     const handleExportCSV = () => {
         const rows = [
-            ['REPORT ANALITICO CALENDARIO EDITORIALE'], ['Data Generazione', moment().format('DD/MM/YYYY HH:mm')], ['KPI GENERALI'], ['Totale Post', stats.totalPosts], ['Pubblicati (Totale)', stats.published], ['Collaborazioni', stats.collaborations], ['Pubblicati (Netto)', stats.netPublished], [], ['DISTRIBUZIONE PER CANALE'], ...stats.postsByChannel.map(c => [c.label, c.value])
+            ['REPORT ANALITICO CALENDARIO EDITORIALE'], ['Data Generazione', moment().format('DD/MM/YYYY HH:mm')], ['KPI GENERALI'], ['Totale Post', stats.totalPosts], ['Pubblicati (Totale)', stats.published], ['Collaborazioni', stats.collaborations], ['Pubblicati (Netto)', stats.netPublished], ['Aggiornamenti (WA/TG)', stats.updatesCount], [], ['DISTRIBUZIONE PER CANALE'], ...stats.postsByChannel.map(c => [c.label, c.value])
         ];
         const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `report_social_${moment().format('YYYY-MM-DD')}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
@@ -375,7 +421,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                                             className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase transition-all ${
                                                 timeRange === 'CUSTOM' && 
                                                 moment(customStartDate).month() === i && 
-                                                moment(customEndDate).month() === i && // FIX: Controllo che anche la data fine sia nello stesso mese
+                                                moment(customEndDate).month() === i &&
                                                 moment(customStartDate).year() === selectedYear 
                                                 ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400' 
                                                 : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -390,42 +436,49 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
 
                         {/* RISULTATI FILTRATI */}
                         <div id="reports-modal-content-body" className="space-y-6">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <KPICard title="Totale" value={stats.totalPosts} icon={<span className="text-2xl">📝</span>} />
-                                <KPICard title="Pubblicati" value={stats.published} colorClass="text-green-600 dark:text-green-400" icon={<span className="text-2xl">✅</span>} />
-                                <KPICard title="Collaborazioni" value={stats.collaborations} colorClass="text-fuchsia-600 dark:text-fuchsia-400" icon={<span className="text-2xl">🤝</span>} />
-                                <KPICard title="Programmati" value={stats.scheduled} colorClass="text-blue-600 dark:text-blue-400" icon={<span className="text-2xl">📅</span>} />
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* PRIMA RIGA: KPI PRINCIPALI */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <KPICard title="Totale Post" value={stats.totalPosts} icon={<span className="text-2xl">📝</span>} />
+                                <KPICard title="Pubblicati (Totale)" value={stats.published} colorClass="text-green-600 dark:text-green-400" icon={<span className="text-2xl">✅</span>} />
                                 <KPICard 
-                                    title="Post Pubblicati (Netto)" 
+                                    title="Pubblicati (Netto)" 
                                     value={stats.netPublished} 
                                     colorClass="text-violet-700 dark:text-violet-300 text-3xl" 
-                                    className="ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-900/20 transform scale-105 z-10 shadow-lg border-transparent" 
+                                    className="ring-2 ring-violet-500 bg-violet-50 dark:bg-violet-900/20 transform md:scale-105 z-10 shadow-lg border-transparent" 
                                     icon={<span className="text-3xl">🎯</span>} 
                                     subtext="Esclusi: TG, WA, Collaborazioni" 
                                 />
                             </div>
+
+                            {/* SECONDA RIGA: KPI SECONDARI */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <KPICard title="Collaborazioni" value={stats.collaborations} colorClass="text-fuchsia-600 dark:text-fuchsia-400" icon={<span className="text-2xl">🤝</span>} />
+                                <KPICard title="Programmati" value={stats.scheduled} colorClass="text-blue-600 dark:text-blue-400" icon={<span className="text-2xl">📅</span>} />
+                                <KPICard title="Aggiornamenti (WA/TG)" value={stats.updatesCount} colorClass="text-cyan-600 dark:text-cyan-400" icon={<span className="text-2xl">💬</span>} />
+                            </div>
                             
+                            {/* GRAFICI A CIAMBELLA/BARRE */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
                                     <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Stato</h3><ChartToggle current={chartPrefs.status} onChange={(t) => setChartPrefs(prev => ({...prev, status: t}))} /></div>
                                     <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.status === 'donut' ? <DonutChart data={stats.statusData} /> : <ProgressBarChart data={stats.statusData} />}</div>
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
                                     <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Canali</h3><ChartToggle current={chartPrefs.channel} onChange={(t) => setChartPrefs(prev => ({...prev, channel: t}))} /></div>
                                     <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.channel === 'donut' ? <DonutChart data={stats.postsByChannel} /> : <ProgressBarChart data={stats.postsByChannel} />}</div>
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
                                     <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Tipologia</h3><ChartToggle current={chartPrefs.type} onChange={(t) => setChartPrefs(prev => ({...prev, type: t}))} /></div>
                                     <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.type === 'donut' ? <DonutChart data={stats.postsByType} /> : <ProgressBarChart data={stats.postsByType} />}</div>
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
                                     <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Team</h3><ChartToggle current={chartPrefs.team} onChange={(t) => setChartPrefs(prev => ({...prev, team: t}))} /></div>
                                     <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.team === 'donut' ? <DonutChart data={stats.teamStats} /> : <ProgressBarChart data={stats.teamStats} />}</div>
                                 </div>
                             </div>
+
+                            {/* NUOVO GRAFICO: TREND MENSILE DELL'ANNO */}
+                            <YearlyTrendChart data={stats.yearlyTrendData} year={selectedYear} />
                         </div>
                     </div>
                 </div>

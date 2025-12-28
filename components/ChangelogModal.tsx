@@ -9,6 +9,31 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.2.2',
+        date: '12/11/2025',
+        changes: [
+            'Bug Fix Calendario: Risolto un problema fastidioso nella vista Mese. Cliccando su "+X Post" ora si apre SOLO la lista dei post giornalieri, senza attivare involontariamente la maschera di creazione di un nuovo post sotto.',
+            'Copia Rapida: Aggiunto un comodo pulsante "Copia" accanto al titolo del post nella maschera di modifica. Basta un click per copiare il titolo negli appunti!'
+        ]
+    },
+    {
+        version: '2.2.1',
+        date: '12/11/2025',
+        changes: [
+            'Super Agenda: Introdotto un selettore di data specifico per la vista Agenda. Ora puoi saltare istantaneamente a qualsiasi giorno specifico per iniziare la lista dei post da quella data.',
+            'UX Toolbar: I controlli Mese/Anno vengono sostituiti dinamicamente dal selettore data preciso quando si passa alla vista Agenda.',
+        ]
+    },
+    {
+        version: '2.2.0',
+        date: '12/11/2025',
+        changes: [
+            'Nuova Dashboard Report: Ridisegnata la sezione alta dei report. Ora i KPI più importanti (Totale, Pubblicati, Netto) sono sulla prima riga in evidenza.',
+            'Nuovo KPI "Aggiornamenti": Aggiunta una scheda dedicata per contare specificamente i post su WhatsApp e Telegram.',
+            'Grafico Trend Annuale: Aggiunto un istogramma in fondo ai report che mostra l\'andamento mensile dei post per tutto l\'anno selezionato, offrendo una visione d\'insieme immediata.'
+        ]
+    },
+    {
         version: '2.1.2',
         date: '12/11/2025',
         changes: [

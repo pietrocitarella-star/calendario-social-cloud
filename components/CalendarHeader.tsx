@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { SocialChannel, AppNotification } from '../types';
+import { SocialChannel, AppNotification, PostStatus } from '../types';
+import { POST_STATUSES, STATUS_COLORS } from '../constants';
 import moment from 'moment';
 
 interface CalendarHeaderProps {
@@ -20,12 +21,15 @@ interface CalendarHeaderProps {
   notifications?: AppNotification[];
   onNotificationClick?: (postId: string) => void;
   onShowChangelog?: () => void;
+  activeStatusFilters?: PostStatus[];
+  onToggleStatus?: (status: PostStatus) => void;
+  statusCounts?: Record<string, number>;
 }
 
 const CalendarHeader: React.FC<CalendarHeaderProps> = ({ 
     onAddPost, 
     onShowReports, 
-    onShowChannels,
+    onShowChannels, 
     onShowTeam,
     onExportJson, 
     onExportCsv, 
@@ -38,7 +42,10 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
     onToggleChannel,
     notifications = [],
     onNotificationClick,
-    onShowChangelog
+    onShowChangelog,
+    activeStatusFilters = [],
+    onToggleStatus,
+    statusCounts = {}
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -75,7 +82,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 text-xs font-mono rounded-full transition-colors"
                         title="Vedi cronologia versioni"
                     >
-                        v2.1.2
+                        v2.2.2
                     </button>
                 )}
             </div>
@@ -227,43 +234,88 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
         </div>
         
         {/* Quick Filters Row */}
-        {channels.length > 0 && onToggleChannel && (
-            <div className="flex flex-wrap gap-2 items-center bg-gray-50 dark:bg-gray-700/30 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
-                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">Filtra:</span>
-                {channels.map(channel => {
-                    const isActive = activeFilters.includes(channel.name);
-                    const isSelected = activeFilters.length > 0 ? isActive : true;
-                    
-                    return (
-                        <button
-                            key={channel.id}
-                            onClick={() => onToggleChannel(channel.name)}
-                            className={`
-                                px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 border
-                                ${isSelected 
-                                    ? 'text-white shadow-sm scale-100' 
-                                    : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600 opacity-60 hover:opacity-100'}
-                            `}
-                            style={{ 
-                                backgroundColor: isSelected ? channel.color : undefined,
-                                borderColor: isSelected ? channel.color : undefined
-                            }}
+        <div className="flex flex-col gap-3">
+            {/* Canali Filters */}
+            {channels.length > 0 && onToggleChannel && (
+                <div className="flex flex-wrap gap-2 items-center bg-gray-50 dark:bg-gray-700/30 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
+                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">Canali:</span>
+                    {channels.map(channel => {
+                        const isActive = activeFilters.includes(channel.name);
+                        const isSelected = activeFilters.length > 0 ? isActive : true;
+                        
+                        return (
+                            <button
+                                key={channel.id}
+                                onClick={() => onToggleChannel(channel.name)}
+                                className={`
+                                    px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 border
+                                    ${isSelected 
+                                        ? 'text-white shadow-sm scale-100' 
+                                        : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600 opacity-60 hover:opacity-100'}
+                                `}
+                                style={{ 
+                                    backgroundColor: isSelected ? channel.color : undefined,
+                                    borderColor: isSelected ? channel.color : undefined
+                                }}
+                            >
+                                {channel.name}
+                                {activeFilters.length > 0 && isActive && <span className="ml-1 text-[10px]">✕</span>}
+                            </button>
+                        );
+                    })}
+                    {activeFilters.length > 0 && (
+                        <button 
+                            onClick={() => activeFilters.forEach(c => onToggleChannel(c))} 
+                            className="text-xs text-gray-500 underline ml-auto hover:text-gray-800 dark:hover:text-gray-200"
                         >
-                            {channel.name}
-                            {activeFilters.length > 0 && isActive && <span className="ml-1 text-[10px]">✕</span>}
+                            Reset filtri
                         </button>
-                    );
-                })}
-                {activeFilters.length > 0 && (
-                    <button 
-                        onClick={() => activeFilters.forEach(c => onToggleChannel(c))} 
-                        className="text-xs text-gray-500 underline ml-auto hover:text-gray-800 dark:hover:text-gray-200"
-                    >
-                        Reset filtri
-                    </button>
-                )}
-            </div>
-        )}
+                    )}
+                </div>
+            )}
+
+            {/* Status Filters */}
+            {onToggleStatus && (
+                <div className="flex flex-wrap gap-2 items-center bg-gray-50 dark:bg-gray-700/30 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
+                     <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">Stato:</span>
+                     {POST_STATUSES.map(status => {
+                         const isActive = activeStatusFilters.includes(status);
+                         const isSelected = activeStatusFilters.length > 0 ? isActive : true;
+                         const count = statusCounts[status] || 0;
+                         const statusColorClass = STATUS_COLORS[status];
+
+                         // Extract color class logic if needed, but here we leverage existing classes
+                         // Active: use the colored background. Inactive: white/gray background.
+                         
+                         return (
+                            <button
+                                key={status}
+                                onClick={() => onToggleStatus(status)}
+                                className={`
+                                    flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 border
+                                    ${isSelected 
+                                        ? `${statusColorClass} text-white shadow-sm border-transparent` 
+                                        : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'}
+                                `}
+                            >
+                                <span className="capitalize">{status}</span>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                                    {count}
+                                </span>
+                            </button>
+                         );
+                     })}
+                     {activeStatusFilters.length > 0 && (
+                        <button 
+                            onClick={() => activeStatusFilters.forEach(s => onToggleStatus(s))} 
+                            className="text-xs text-gray-500 underline ml-auto hover:text-gray-800 dark:hover:text-gray-200"
+                        >
+                            Reset filtri
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
     </div>
   );
 };
