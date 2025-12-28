@@ -311,11 +311,11 @@ const App: React.FC = () => {
         return result;
     }, [events, searchTerm, activeChannelFilters, activeStatusFilters]);
     
-    // Status Counts Calculation (Dynamic based on Search and Channels only)
+    // Status Counts Calculation (Dynamic based on Search, Channels AND Current View Date Range)
     const statusCounts = useMemo(() => {
         const counts: Record<string, number> = {};
         
-        // Base list for counting: Filtered by Search and Channels, but NOT by Status (so we see available counts)
+        // Base list for counting: Filtered by Search and Channels
         let baseList = posts;
         if (searchTerm.trim()) {
             const lowerTerm = searchTerm.toLowerCase();
@@ -328,11 +328,39 @@ const App: React.FC = () => {
             baseList = baseList.filter(p => activeChannelFilters.includes(p.social));
         }
 
+        // --- NEW: FILTER BY CURRENT VIEW RANGE ---
+        let start, end;
+        
+        // Calculate the range based on current view
+        if (view === Views.MONTH) {
+            start = moment(date).startOf('month');
+            end = moment(date).endOf('month');
+        } else if (view === Views.WEEK) {
+            start = moment(date).startOf('week');
+            end = moment(date).endOf('week');
+        } else {
+            // Day or Agenda view defaults to current day (or agenda range logic if preferred, keeping simple for now)
+            start = moment(date).startOf('day');
+            end = moment(date).endOf('day');
+            
+            // Per Agenda, potremmo voler mostrare il mese corrente o un range specifico, 
+            // ma per coerenza con la vista "lista", spesso si intende il periodo visibile. 
+            // Se in Agenda mostriamo una lista infinita, forse ha senso il mese corrente o l'anno.
+            // Qui usiamo la logica: se Agenda, consideriamo il mese corrente per dare un contesto utile,
+            // oppure (migliore) i prossimi 30 giorni dalla data selezionata.
+            if (view === Views.AGENDA) {
+                end = moment(date).add(30, 'days');
+            }
+        }
+
+        // Apply Date Range Filter
+        baseList = baseList.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
+
         baseList.forEach(p => {
             counts[p.status] = (counts[p.status] || 0) + 1;
         });
         return counts;
-    }, [posts, searchTerm, activeChannelFilters]);
+    }, [posts, searchTerm, activeChannelFilters, date, view]); // Added date and view as dependencies
 
     const toggleChannelFilter = useCallback((channelName: string) => {
         setActiveChannelFilters(prev => {
