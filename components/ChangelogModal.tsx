@@ -9,6 +9,15 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.2.3',
+        date: '13/11/2025',
+        changes: [
+            'Layout Perfetto (Flexbox): Ridisegnata la struttura dell\'app. Ora il calendario e l\'agenda si adattano elasticamente all\'altezza dello schermo. Gli ultimi post in basso non vengono più tagliati, indipendentemente dalla dimensione del monitor.',
+            'Fix Eliminazione Massiva: Risolto il problema del pulsante "Elimina" nella vista Agenda che a volte non rispondeva. Ora appare una finestra di conferma personalizzata sicura ed evidente.',
+            'Stabilità Selezione: Migliorata la gestione della selezione multipla in Agenda per evitare deselezioni accidentali durante le operazioni.'
+        ]
+    },
+    {
         version: '2.2.2',
         date: '12/11/2025',
         changes: [
@@ -90,7 +99,7 @@ const changelogData: ChangeLogEntry[] = [
         version: '1.9.5',
         date: '08/11/2025',
         changes: [
-            'Migliorata Vista Mese: Cliccando su "+ N altri" si apre ora una finestra dedicata con la lista completa dei post del giorno in stile Agenda (invece di cambiare vista).',
+            'Migliorata Vista Mese: Cliccando su "+ Altri" si apre ora una finestra dedicata con la lista completa dei post del giorno in stile Agenda (invece di cambiare vista).',
             'KPI Avanzati: Aggiunto indicatore "Post Pubblicati (Netto)" nei report, che esclude automaticamente WhatsApp, Telegram e le Collaborazioni dal conteggio totale.',
             'Refactoring UX: Migliorata la leggibilità delle lise popup.'
         ]
