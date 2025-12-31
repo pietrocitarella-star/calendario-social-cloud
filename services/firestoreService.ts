@@ -173,6 +173,22 @@ export const deletePost = async (id: string): Promise<void> => {
     }
 };
 
+export const deletePostsBulk = async (ids: string[]): Promise<void> => {
+    console.log(`Avvio eliminazione massiva di ${ids.length} documenti...`);
+    try {
+        const batch = writeBatch(db);
+        ids.forEach(id => {
+            const postRef = doc(db, POSTS_COLLECTION, id);
+            batch.delete(postRef);
+        });
+        await batch.commit();
+        console.log('Eliminazione massiva completata.');
+    } catch (e) {
+        handleError('eliminazione massiva post', e);
+        throw e;
+    }
+};
+
 export const savePostsToStorage = async (newPosts: Post[]) => {
     try {
         const chunks = [];

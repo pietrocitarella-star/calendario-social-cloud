@@ -10,6 +10,7 @@ import {
     addPost, 
     updatePost, 
     deletePost, 
+    deletePostsBulk,
     savePostsToStorage, 
     subscribeToChannels, 
     saveSocialChannels,
@@ -120,6 +121,12 @@ const App: React.FC = () => {
         posts: []
     });
 
+    // SELECTION MODE STATE (Agenda View)
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
+    // Modale di conferma personalizzata
+    const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
     const [importPreview, setImportPreview] = useState<{
         type: 'json' | 'csv';
         total: number;
@@ -142,6 +149,15 @@ const App: React.FC = () => {
             local.format(start, 'DD MMM', culture) + ' - ' + local.format(end, 'DD MMM YYYY', culture),
         agendaDateFormat: (date, culture, local) => local.format(date, 'ddd DD MMM', culture),
     }), []); 
+
+    // Reset selezione quando cambia la vista
+    useEffect(() => {
+        if (view !== Views.AGENDA) {
+            setIsSelectionMode(false);
+            setSelectedPostIds([]);
+            setIsBulkDeleteModalOpen(false);
+        }
+    }, [view]);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -382,12 +398,25 @@ const App: React.FC = () => {
         });
     }, []);
 
+    const handleCheckboxChange = useCallback((postId: string, checked: boolean) => {
+        setSelectedPostIds(prev => {
+            if (checked) {
+                return [...prev, postId];
+            } else {
+                return prev.filter(id => id !== postId);
+            }
+        });
+    }, []);
+
     const handleSelectSlot = useCallback(({ start }: { start: Date }) => {
         // BUG FIX: Se è attivo il blocco interazione (perché abbiamo appena cliccato "mostra post"), usciamo.
         if (interactionBlockerRef.current) {
             interactionBlockerRef.current = false;
             return;
         }
+
+        // Se siamo in modalità selezione multipla, non aprire il modale nuovo post cliccando slot vuoti
+        if (isSelectionMode) return;
 
         if (socialChannels.length === 0) {
             alert("Attendi il caricamento dei canali o aggiungine uno.");
@@ -401,15 +430,18 @@ const App: React.FC = () => {
             title: '',
         });
         setIsPostModalOpen(true);
-    }, [socialChannels]);
+    }, [socialChannels, isSelectionMode]);
 
     const handleSelectEvent = useCallback((event: CalendarEvent) => {
+        // Se siamo in modalità selezione multipla, non aprire il modale dettaglio
+        if (isSelectionMode) return;
+
         const post = posts.find(p => p.id === event.id);
         if (post) {
             setSelectedEvent(post);
         }
         setIsPostModalOpen(true);
-    }, [posts]);
+    }, [posts, isSelectionMode]);
 
     const isPostVisible = useCallback((post: Post) => {
         if (activeChannelFilters.length > 0 && !activeChannelFilters.includes(post.social)) return false;
@@ -461,6 +493,36 @@ const App: React.FC = () => {
         await deletePost(id);
         closePostModal();
     }, [closePostModal]);
+
+    // PREPARA ELIMINAZIONE MASSIVA: Apre Modale
+    const handleBulkDeleteClick = useCallback(() => {
+        if (selectedPostIds.length === 0) return;
+        setIsBulkDeleteModalOpen(true);
+    }, [selectedPostIds]);
+
+    // ESEGUE ELIMINAZIONE MASSIVA
+    const performBulkDelete = useCallback(async () => {
+        if (selectedPostIds.length === 0) return;
+        try {
+            await deletePostsBulk(selectedPostIds);
+            setSelectedPostIds([]);
+            setIsSelectionMode(false);
+            setIsBulkDeleteModalOpen(false);
+        } catch (e) {
+            console.error("Errore eliminazione massiva", e);
+            alert("Errore durante l'eliminazione dei post. Riprova.");
+        }
+    }, [selectedPostIds]);
+
+    const handleToggleSelectionMode = useCallback(() => {
+        setIsSelectionMode(prev => {
+            if (prev) {
+                // Se stiamo disattivando, puliamo la selezione
+                setSelectedPostIds([]);
+            }
+            return !prev;
+        });
+    }, []);
 
     const handleSaveChannels = useCallback(async (updatedChannels: SocialChannel[]) => {
         const channelsToDelete = socialChannels.filter(c => !updatedChannels.find(uc => uc.id === c.id));
@@ -598,131 +660,154 @@ const App: React.FC = () => {
         return { style, className: 'custom-calendar-event' };
     }, [socialChannels]);
 
-    const CustomEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => {
-        const statusColor = STATUS_COLORS[event.status];
-        const assignee = teamMembers.find(m => m.id === event.assignedTo);
-        const channel = socialChannels.find(c => c.name === event.social);
-        const channelColor = channel ? channel.color : '#9ca3af';
+    // OPTIMIZED COMPONENTS DEFINITION WITH USEMEMO
+    const { components } = useMemo(() => ({
+        components: {
+            event: ({ event }: EventProps<CalendarEvent>) => {
+                const statusColor = STATUS_COLORS[event.status];
+                const assignee = teamMembers.find(m => m.id === event.assignedTo);
+                const channel = socialChannels.find(c => c.name === event.social);
+                const channelColor = channel ? channel.color : '#9ca3af';
 
-        return (
-            <div className="flex flex-col h-full justify-between overflow-hidden relative w-full">
-                <div className="flex flex-col gap-0.5 w-full">
-                     <div className="flex items-center justify-between w-full">
-                        <span 
-                            className="text-[9px] font-bold text-white px-1 py-0.5 rounded-sm shadow-sm truncate uppercase tracking-tight"
-                            style={{ backgroundColor: channelColor }}
-                        >
-                            {event.social}
-                        </span>
-                        <div className={`w-2 h-2 rounded-full ${statusColor} ring-1 ring-white dark:ring-gray-700 flex-shrink-0`}></div>
-                     </div>
-                     <div className="event-title font-semibold text-xs text-gray-800 dark:text-gray-100 leading-tight" title={event.title}>
-                        {event.title || '(Senza titolo)'}
-                     </div>
-                </div>
-                <div className="event-avatar mt-auto pt-1 flex items-center justify-between border-t border-gray-100 dark:border-gray-700">
-                    <span className="text-[10px] text-gray-500 capitalize truncate max-w-[70%]">{event.postType}</span>
-                    {assignee && (
-                        <div 
-                            className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm flex-shrink-0 border border-white dark:border-gray-800" 
-                            style={{ backgroundColor: assignee.color }}
-                            title={`Assegnato a: ${assignee.name}`}
-                        >
-                            {assignee.name.substring(0, 1).toUpperCase()}
+                return (
+                    <div className="flex flex-col h-full justify-between overflow-hidden relative w-full">
+                        <div className="flex flex-col gap-0.5 w-full">
+                            <div className="flex items-center justify-between w-full">
+                                <span 
+                                    className="text-[9px] font-bold text-white px-1 py-0.5 rounded-sm shadow-sm truncate uppercase tracking-tight"
+                                    style={{ backgroundColor: channelColor }}
+                                >
+                                    {event.social}
+                                </span>
+                                <div className={`w-2 h-2 rounded-full ${statusColor} ring-1 ring-white dark:ring-gray-700 flex-shrink-0`}></div>
+                            </div>
+                            <div className="event-title font-semibold text-xs text-gray-800 dark:text-gray-100 leading-tight" title={event.title}>
+                                {event.title || '(Senza titolo)'}
+                            </div>
                         </div>
-                    )}
-                </div>
-            </div>
-        );
-    };
-
-    const CustomAgendaEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => {
-        const statusColor = STATUS_COLORS[event.status];
-        const assignee = teamMembers.find(m => m.id === event.assignedTo);
-        const channel = socialChannels.find(c => c.name === event.social);
-        const channelColor = channel ? channel.color : '#9ca3af';
-
-        return (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full py-1">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-grow">
-                    <span 
-                        className="text-[10px] font-bold text-white px-2 py-1 rounded-md shadow-sm uppercase tracking-wide w-fit"
-                        style={{ backgroundColor: channelColor }}
-                    >
-                        {event.social}
-                    </span>
-                    <span className="font-semibold text-gray-900 dark:text-white text-sm">{event.title || '(Senza titolo)'}</span>
-                </div>
-                <div className="flex items-center gap-4 flex-shrink-0">
-                    <div className="flex items-center gap-1.5">
-                        <div className={`w-2.5 h-2.5 rounded-full ${statusColor}`}></div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 capitalize hidden sm:inline">{event.status}</span>
-                    </div>
-                    <div className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300 text-xs border border-gray-200 dark:border-gray-600 capitalize">
-                        {event.postType}
-                    </div>
-                    {assignee ? (
-                         <div 
-                            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm border border-white dark:border-gray-800" 
-                            style={{ backgroundColor: assignee.color }}
-                            title={`Assegnato a: ${assignee.name}`}
-                        >
-                            {assignee.name.substring(0, 1).toUpperCase()}
+                        <div className="event-avatar mt-auto pt-1 flex items-center justify-between border-t border-gray-100 dark:border-gray-700">
+                            <span className="text-[10px] text-gray-500 capitalize truncate max-w-[70%]">{event.postType}</span>
+                            {assignee && (
+                                <div 
+                                    className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm flex-shrink-0 border border-white dark:border-gray-800" 
+                                    style={{ backgroundColor: assignee.color }}
+                                    title={`Assegnato a: ${assignee.name}`}
+                                >
+                                    {assignee.name.substring(0, 1).toUpperCase()}
+                                </div>
+                            )}
                         </div>
-                    ) : (
-                        <div className="w-6 h-6"></div>
-                    )}
-                </div>
-            </div>
-        );
-    };
-    
-    const CustomWeekHeader: React.FC<HeaderProps> = ({ date, localizer }) => {
-        const dayStart = moment(date).startOf('day');
-        const dayEnd = moment(date).endOf('day');
-        const count = posts.filter(p => 
-            moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
-        ).length;
-        return (
-            <div className="flex flex-col items-center justify-center py-1 w-full">
-                <span className="text-sm font-semibold capitalize">{localizer.format(date, 'ddd DD/MM')}</span>
-                <div className={`mt-2 w-full text-center py-1 rounded-md text-[11px] font-bold border transition-colors ${count > 0 ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'bg-transparent text-gray-300 border-transparent dark:text-gray-600'}`}>
-                    {count > 0 ? `${count} Post` : '-'}
-                </div>
-            </div>
-        );
-    };
-    
-    const CustomMonthDateHeader: React.FC<DateHeaderProps> = ({ date, label }) => {
-        const dayStart = moment(date).startOf('day');
-        const dayEnd = moment(date).endOf('day');
-        const postsForDay = posts.filter(p => 
-            moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
-        );
-        const count = postsForDay.length;
-        return (
-            <div className="flex flex-col items-start p-1 w-full relative" style={{ minHeight: '30px' }}>
-                <span className="text-sm font-semibold mb-1">{label}</span>
-                {count > 0 && (
-                    <button
-                        onClick={(e) => { 
-                            e.stopPropagation(); 
-                            // Attiviamo il blocco interazione per evitare che scatti anche handleSelectSlot
-                            interactionBlockerRef.current = true;
-                            // Reset del blocco dopo un breve timeout, per sicurezza
-                            setTimeout(() => { interactionBlockerRef.current = false; }, 300);
-                            
-                            handleShowMore([], date); 
-                        }}
-                        className="w-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 text-xs font-bold px-2 py-1 rounded shadow-sm hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors text-center z-50 relative pointer-events-auto"
-                        style={{ marginTop: '2px' }}
-                    >
-                        {count} Post
-                    </button>
-                )}
-            </div>
-        );
-    };
+                    </div>
+                );
+            },
+            agenda: {
+                event: ({ event }: EventProps<CalendarEvent>) => {
+                    const statusColor = STATUS_COLORS[event.status];
+                    const assignee = teamMembers.find(m => m.id === event.assignedTo);
+                    const channel = socialChannels.find(c => c.name === event.social);
+                    const channelColor = channel ? channel.color : '#9ca3af';
+                    
+                    // Check if selected in selection mode
+                    const isSelected = selectedPostIds.includes(event.id || '');
+
+                    return (
+                        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full py-1 ${isSelectionMode && isSelected ? 'bg-blue-50 dark:bg-blue-900/20 rounded px-2 -mx-2' : ''}`}>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-grow">
+                                {/* Selection Checkbox */}
+                                {isSelectionMode && (
+                                    <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={isSelected}
+                                            onChange={(e) => {
+                                                if (event.id) handleCheckboxChange(event.id, e.target.checked);
+                                            }}
+                                            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                        />
+                                    </div>
+                                )}
+
+                                <span 
+                                    className="text-[10px] font-bold text-white px-2 py-1 rounded-md shadow-sm uppercase tracking-wide w-fit"
+                                    style={{ backgroundColor: channelColor }}
+                                >
+                                    {event.social}
+                                </span>
+                                <span className="font-semibold text-gray-900 dark:text-white text-sm">{event.title || '(Senza titolo)'}</span>
+                            </div>
+                            <div className="flex items-center gap-4 flex-shrink-0">
+                                <div className="flex items-center gap-1.5">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${statusColor}`}></div>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 capitalize hidden sm:inline">{event.status}</span>
+                                </div>
+                                <div className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-600 dark:text-gray-300 text-xs border border-gray-200 dark:border-gray-600 capitalize">
+                                    {event.postType}
+                                </div>
+                                {assignee ? (
+                                    <div 
+                                        className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm border border-white dark:border-gray-800" 
+                                        style={{ backgroundColor: assignee.color }}
+                                        title={`Assegnato a: ${assignee.name}`}
+                                    >
+                                        {assignee.name.substring(0, 1).toUpperCase()}
+                                    </div>
+                                ) : (
+                                    <div className="w-6 h-6"></div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                }
+            },
+            toolbar: (props: ToolbarProps) => <CustomToolbar {...props} />,
+            week: {
+                header: ({ date, localizer }: HeaderProps) => {
+                    const dayStart = moment(date).startOf('day');
+                    const dayEnd = moment(date).endOf('day');
+                    const count = posts.filter(p => 
+                        moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
+                    ).length;
+                    return (
+                        <div className="flex flex-col items-center justify-center py-1 w-full">
+                            <span className="text-sm font-semibold capitalize">{localizer.format(date, 'ddd DD/MM')}</span>
+                            <div className={`mt-2 w-full text-center py-1 rounded-md text-[11px] font-bold border transition-colors ${count > 0 ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800' : 'bg-transparent text-gray-300 border-transparent dark:text-gray-600'}`}>
+                                {count > 0 ? `${count} Post` : '-'}
+                            </div>
+                        </div>
+                    );
+                }
+            },
+            month: {
+                dateHeader: ({ date, label }: DateHeaderProps) => {
+                    const dayStart = moment(date).startOf('day');
+                    const dayEnd = moment(date).endOf('day');
+                    const postsForDay = posts.filter(p => 
+                        moment(p.date).isBetween(dayStart, dayEnd, undefined, '[]') && isPostVisible(p)
+                    );
+                    const count = postsForDay.length;
+                    return (
+                        <div className="flex flex-col items-start p-1 w-full relative" style={{ minHeight: '30px' }}>
+                            <span className="text-sm font-semibold mb-1">{label}</span>
+                            {count > 0 && (
+                                <button
+                                    onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        interactionBlockerRef.current = true;
+                                        setTimeout(() => { interactionBlockerRef.current = false; }, 300);
+                                        handleShowMore([], date); 
+                                    }}
+                                    className="w-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 text-xs font-bold px-2 py-1 rounded shadow-sm hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors text-center z-50 relative pointer-events-auto"
+                                    style={{ marginTop: '2px' }}
+                                >
+                                    {count} Post
+                                </button>
+                            )}
+                        </div>
+                    );
+                }
+            }
+        }
+    }), [socialChannels, teamMembers, isSelectionMode, selectedPostIds, handleCheckboxChange, posts, isPostVisible, handleShowMore]);
 
     const handleDrillDown = useCallback((date: Date) => {
         setDate(date);
@@ -755,53 +840,98 @@ const App: React.FC = () => {
     }
 
     return (
-        <div className="p-4 md:p-8 font-sans text-gray-800 dark:text-gray-200">
+        <div className="h-screen w-full flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 overflow-hidden">
             {isLoadingReportData && (
                 <div className="fixed inset-0 bg-white/50 dark:bg-black/50 z-[100] flex flex-col items-center justify-center backdrop-blur-sm">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
                     <p className="mt-4 font-semibold text-blue-600 dark:text-blue-400">Caricamento dati completi...</p>
                 </div>
             )}
-            <div className="max-w-7xl mx-auto">
-                <div className="flex justify-between items-center mb-2">
+            
+            <div className="flex-1 flex flex-col max-w-7xl mx-auto w-full p-2 md:p-4 h-full overflow-hidden">
+                <div className="flex justify-between items-center mb-2 flex-shrink-0">
                     <div className="text-xs text-gray-500 dark:text-gray-400">Loggato come: <span className="font-semibold text-blue-600 dark:text-blue-400">{user.email}</span></div>
                     <button onClick={handleLogout} className="text-xs px-3 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors">Esci</button>
                 </div>
-                <CalendarHeader 
-                    onAddPost={() => handleSelectSlot({ start: new Date() })}
-                    onShowReports={handleShowReports}
-                    onShowChannels={() => setIsChannelsModalOpen(true)}
-                    onShowTeam={() => setIsTeamModalOpen(true)}
-                    onExportJson={handleExportJson}
-                    onExportCsv={handleExportCsv}
-                    onImport={handleImportFileSelect}
-                    searchTerm={searchTerm}
-                    onSearchChange={setSearchTerm}
-                    fileInputRef={fileInputRef}
-                    channels={socialChannels}
-                    activeFilters={activeChannelFilters}
-                    onToggleChannel={toggleChannelFilter}
-                    notifications={notifications}
-                    onNotificationClick={handleNotificationClick}
-                    onShowChangelog={() => setIsChangelogModalOpen(true)}
-                    activeStatusFilters={activeStatusFilters}
-                    onToggleStatus={toggleStatusFilter}
-                    statusCounts={statusCounts}
-                />
-                <StatusLegend />
-                <div className="bg-white dark:bg-gray-800 p-4 pb-10 rounded-lg shadow-lg" style={{ height: 'calc(100vh - 240px)' }}>
+                
+                <div className="flex-shrink-0 space-y-2 mb-2">
+                    <CalendarHeader 
+                        onAddPost={() => handleSelectSlot({ start: new Date() })}
+                        onShowReports={handleShowReports}
+                        onShowChannels={() => setIsChannelsModalOpen(true)}
+                        onShowTeam={() => setIsTeamModalOpen(true)}
+                        onExportJson={handleExportJson}
+                        onExportCsv={handleExportCsv}
+                        onImport={handleImportFileSelect}
+                        searchTerm={searchTerm}
+                        onSearchChange={setSearchTerm}
+                        fileInputRef={fileInputRef}
+                        channels={socialChannels}
+                        activeFilters={activeChannelFilters}
+                        onToggleChannel={toggleChannelFilter}
+                        notifications={notifications}
+                        onNotificationClick={handleNotificationClick}
+                        onShowChangelog={() => setIsChangelogModalOpen(true)}
+                        activeStatusFilters={activeStatusFilters}
+                        onToggleStatus={toggleStatusFilter}
+                        statusCounts={statusCounts}
+                    />
+                    
+                    {/* AGENDA BULK ACTIONS TOOLBAR */}
+                    {view === Views.AGENDA && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-3 rounded-lg flex items-center justify-between animate-fadeIn">
+                            <div className="flex items-center gap-3">
+                                <h3 className="text-sm font-bold text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                    Gestione Agenda
+                                </h3>
+                                <div className="h-6 w-px bg-blue-200 dark:bg-blue-700 mx-1"></div>
+                                <button
+                                    onClick={handleToggleSelectionMode}
+                                    className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
+                                        isSelectionMode 
+                                        ? 'bg-blue-200 text-blue-800 dark:bg-blue-700 dark:text-blue-100' 
+                                        : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                                    }`}
+                                >
+                                    {isSelectionMode ? 'Annulla Selezione' : 'Seleziona Post'}
+                                </button>
+                            </div>
+                            
+                            {isSelectionMode && (
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                                        {selectedPostIds.length} selezionati
+                                    </span>
+                                    <button
+                                        onClick={handleBulkDeleteClick}
+                                        disabled={selectedPostIds.length === 0}
+                                        className="px-4 py-1.5 bg-red-600 text-white text-xs font-bold rounded shadow-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        Elimina ({selectedPostIds.length})
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <StatusLegend />
+                </div>
+
+                <div className="flex-grow min-h-0 bg-white dark:bg-gray-800 rounded-lg shadow-lg relative p-2 md:p-4 overflow-hidden">
                     <Calendar
+                        style={{ height: '100%' }}
                         localizer={localizer} culture='it' events={filteredEvents} startAccessor="start" endAccessor="end" view={view} onView={setView} date={date} onNavigate={setDate} views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]} selectable scrollToTime={defaultScrollTime} onSelectSlot={handleSelectSlot} onSelectEvent={handleSelectEvent} eventPropGetter={eventPropGetter} messages={calendarMessages} formats={calendarFormats} popup={false} onDrillDown={handleDrillDown} onShowMore={handleShowMore} dayLayoutAlgorithm="no-overlap" 
-                        components={{
-                            event: CustomEvent,
-                            agenda: { event: CustomAgendaEvent },
-                            toolbar: (props: ToolbarProps) => <CustomToolbar {...props} />,
-                            week: { header: CustomWeekHeader },
-                            month: { dateHeader: CustomMonthDateHeader }
-                        }}
+                        components={components}
                     />
                 </div>
             </div>
+            
             <Suspense fallback={null}>
                 {isPostModalOpen && selectedEvent && (
                     <PostModal isOpen={isPostModalOpen} post={selectedEvent} socialChannels={socialChannels} teamMembers={teamMembers} onClose={closePostModal} onSave={handleSavePost} onDelete={handleDeletePost} />
@@ -830,6 +960,37 @@ const App: React.FC = () => {
                         <div className="flex gap-3">
                             <button onClick={cancelImport} className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg text-gray-800 dark:text-white transition-colors">Annulla</button>
                             <button onClick={confirmImport} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold transition-colors shadow-lg">Conferma</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* BULK DELETE CONFIRMATION MODAL */}
+            {isBulkDeleteModalOpen && (
+                <div className="fixed inset-0 bg-gray-900 bg-opacity-80 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-sm text-center transform scale-100 transition-transform">
+                        <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Elimina {selectedPostIds.length} Post</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                            Sei sicuro di voler eliminare definitivamente i post selezionati? Questa azione non può essere annullata.
+                        </p>
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={() => setIsBulkDeleteModalOpen(false)} 
+                                className="flex-1 px-4 py-2.5 bg-gray-200 dark:bg-gray-600 rounded-lg text-gray-800 dark:text-white transition-colors font-medium hover:bg-gray-300 dark:hover:bg-gray-500"
+                            >
+                                Annulla
+                            </button>
+                            <button 
+                                onClick={performBulkDelete} 
+                                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-semibold transition-colors shadow-md hover:bg-red-700"
+                            >
+                                Sì, Elimina
+                            </button>
                         </div>
                     </div>
                 </div>
