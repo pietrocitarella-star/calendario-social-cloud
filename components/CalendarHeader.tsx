@@ -24,6 +24,7 @@ interface CalendarHeaderProps {
   activeStatusFilters?: PostStatus[];
   onToggleStatus?: (status: PostStatus) => void;
   statusCounts?: Record<string, number>;
+  onShowFollowers?: () => void; // NUOVA PROP
 }
 
 const CalendarHeader: React.FC<CalendarHeaderProps> = ({ 
@@ -45,7 +46,8 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
     onShowChangelog,
     activeStatusFilters = [],
     onToggleStatus,
-    statusCounts = {}
+    statusCounts = {},
+    onShowFollowers // NUOVA PROP
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -82,7 +84,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 text-xs font-mono rounded-full transition-colors"
                         title="Vedi cronologia versioni"
                     >
-                        v2.2.3
+                        v2.3.0
                     </button>
                 )}
             </div>
@@ -110,6 +112,12 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" /></svg>
                         Report
                     </button>
+                    {onShowFollowers && (
+                        <button onClick={onShowFollowers} className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-pink-600 rounded-lg hover:bg-pink-700 transition-colors shadow-sm whitespace-nowrap">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                            Follower
+                        </button>
+                    )}
                     <button onClick={onShowChannels} className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors shadow-sm whitespace-nowrap">
                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                         Canali

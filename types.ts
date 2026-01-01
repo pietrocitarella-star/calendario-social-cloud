@@ -64,3 +64,11 @@ export interface AppNotification {
     postId: string;
     date: string;
 }
+
+export interface FollowerStat {
+    id?: string;
+    date: string; // YYYY-MM-DD
+    channels: Record<string, number>; // nome canale -> numero follower
+    total: number; // Totale calcolato (esclusi messaggistica)
+    growthRate?: number; // Percentuale rispetto al mese precedente
+}

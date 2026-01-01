@@ -36,6 +36,7 @@ const SocialChannelsModal = lazy(() => import('./components/SocialChannelsModal'
 const TeamMembersModal = lazy(() => import('./components/TeamMembersModal'));
 const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
 const DayDetailsModal = lazy(() => import('./components/DayDetailsModal'));
+const FollowersModal = lazy(() => import('./components/FollowersModal')); // NUOVA IMPORTAZIONE
 
 moment.locale('it');
 moment.updateLocale('it', {
@@ -114,6 +115,7 @@ const App: React.FC = () => {
     const [isChannelsModalOpen, setIsChannelsModalOpen] = useState(false);
     const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
     const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
+    const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false); // STATO NUOVA MODALE
     
     const [dayModalData, setDayModalData] = useState<{ isOpen: boolean, date: Date | null, posts: Post[] }>({
         isOpen: false,
@@ -875,6 +877,7 @@ const App: React.FC = () => {
                         activeStatusFilters={activeStatusFilters}
                         onToggleStatus={toggleStatusFilter}
                         statusCounts={statusCounts}
+                        onShowFollowers={() => setIsFollowersModalOpen(true)} // PASSATA FUNZIONE
                     />
                     
                     {/* AGENDA BULK ACTIONS TOOLBAR */}
@@ -947,6 +950,10 @@ const App: React.FC = () => {
                 )}
                 {isChangelogModalOpen && (
                     <ChangelogModal isOpen={isChangelogModalOpen} onClose={() => setIsChangelogModalOpen(false)} />
+                )}
+                {/* MODALE FOLLOWERS */}
+                {isFollowersModalOpen && (
+                    <FollowersModal isOpen={isFollowersModalOpen} onClose={() => setIsFollowersModalOpen(false)} channels={socialChannels} />
                 )}
                 {dayModalData.isOpen && (
                     <DayDetailsModal isOpen={dayModalData.isOpen} onClose={() => setDayModalData(prev => ({ ...prev, isOpen: false }))} date={dayModalData.date} posts={dayModalData.posts} teamMembers={teamMembers} channels={socialChannels} onEditPost={(post) => { setSelectedEvent(post); setIsPostModalOpen(true); }} />

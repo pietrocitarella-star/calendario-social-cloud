@@ -9,6 +9,15 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.3.0',
+        date: '14/11/2025',
+        changes: [
+            'Analisi Follower Avanzata: Introdotta una barra dei filtri nella modale follower. Ora puoi analizzare l\'andamento di un singolo canale o confrontarne alcuni specifici (es. solo Instagram + TikTok) cliccando sui pulsanti in alto.',
+            'Correzione Dati Mancanti (Fill-Forward): Se salti un inserimento per un mese, il sistema ora "ricorda" automaticamente l\'ultimo valore valido invece di segnare zero. Questo garantisce grafici di crescita sempre coerenti e realistici.',
+            'Nuovi Grafici Strategici: Sostituiti i grafici generici con due visualizzazioni mirate: "Trend Totale" (numeri assoluti in crescita) e "Variazione Netta" (quanti follower reali guadagnati/persi mese su mese).'
+        ]
+    },
+    {
         version: '2.2.3',
         date: '13/11/2025',
         changes: [

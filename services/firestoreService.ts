@@ -1,5 +1,5 @@
 
-import { Post, SocialChannel, PostVersion, TeamMember, PostStatus, PostType } from '../types';
+import { Post, SocialChannel, PostVersion, TeamMember, PostStatus, PostType, FollowerStat } from '../types';
 import { db } from '../firebaseConfig';
 import { 
     collection, 
@@ -19,6 +19,7 @@ import {
 const POSTS_COLLECTION = 'posts';
 const CHANNELS_COLLECTION = 'channels';
 const TEAM_COLLECTION = 'team_members';
+const STATS_COLLECTION = 'follower_stats';
 
 // --- HELPERS ---
 
@@ -312,6 +313,55 @@ export const deleteTeamMemberFromDb = async (id: string) => {
         await deleteDoc(doc(db, TEAM_COLLECTION, id));
     } catch (e) {
         handleError('eliminazione membro team', e);
+        throw e;
+    }
+};
+
+// --- FOLLOWERS STATS MANAGEMENT ---
+
+export const subscribeToFollowerStats = (callback: (stats: FollowerStat[]) => void) => {
+    const q = query(collection(db, STATS_COLLECTION), orderBy('date', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const stats: FollowerStat[] = [];
+        snapshot.forEach((doc) => {
+            stats.push({ id: doc.id, ...(doc.data() as any) } as FollowerStat);
+        });
+        callback(stats);
+    }, (error) => {
+        console.error("Errore sottoscrizione stats:", error);
+    });
+
+    return unsubscribe;
+};
+
+export const addFollowerStat = async (stat: FollowerStat): Promise<void> => {
+    try {
+        const { id, ...data } = stat;
+        // Se esiste già una statistica per quella data, aggiorniamola invece di creare doppioni
+        const q = query(collection(db, STATS_COLLECTION), where('date', '==', stat.date));
+        const snapshot = await getDocs(q);
+        
+        if (!snapshot.empty) {
+            // Aggiorna esistente
+            const docId = snapshot.docs[0].id;
+            const docRef = doc(db, STATS_COLLECTION, docId);
+            await updateDoc(docRef, data);
+        } else {
+            // Crea nuova
+            await addDoc(collection(db, STATS_COLLECTION), data);
+        }
+    } catch (e) {
+        handleError('salvataggio statistiche follower', e);
+        throw e;
+    }
+};
+
+export const deleteFollowerStat = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(db, STATS_COLLECTION, id));
+    } catch (e) {
+        handleError('eliminazione statistica', e);
         throw e;
     }
 };
