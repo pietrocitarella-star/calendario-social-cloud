@@ -230,7 +230,6 @@ export const parseFollowersCsv = (csvContent: string): FollowerStat[] => {
     if (lines.length < 2) return [];
 
     // DETERMINAZIONE DELIMITATORE (Punto e virgola vs Virgola)
-    // Controlliamo la prima riga (header) per vedere quale separatore è più frequente
     const firstLine = lines[0];
     const semicolonCount = (firstLine.match(/;/g) || []).length;
     const commaCount = (firstLine.match(/,/g) || []).length;
@@ -252,47 +251,62 @@ export const parseFollowersCsv = (csvContent: string): FollowerStat[] => {
     const dateFormats = [
         'DD/MM/YYYY', 'DD-MM-YYYY', 'D/M/YYYY', 'D-M-YYYY', // Italian formats
         'YYYY-MM-DD', 'YYYY/MM/DD', // ISO formats
-        'MM/DD/YYYY' // US fallback
+        'MM/DD/YYYY', 'D-MMM-YY', 'DD-MMM-YY', 'D/MMM/YY' // Other formats
     ];
+
+    // Variabile per il "Fill Forward" della data
+    let lastValidDateStr: string | null = null;
 
     for (let i = 1; i < lines.length; i++) {
         const values = parseCsvLine(lines[i], delimiter);
         
-        // Se la riga è vuota o ha meno colonne dell'indice massimo richiesto, salta
-        if (values.length <= Math.max(dateIdx, channelIdx, countIdx)) continue;
+        // Controllo rilassato: ci servono almeno i dati di Canale e Conteggio. 
+        // La data può essere vuota (fill forward) o a un indice basso, ma il canale/conteggio potrebbero essere dopo.
+        const maxRequiredIdx = Math.max(channelIdx, countIdx);
+        if (values.length <= maxRequiredIdx) continue;
 
-        const rawDate = values[dateIdx];
+        let rawDate = values[dateIdx];
         const rawChannel = values[channelIdx];
         const rawCount = values[countIdx];
 
-        if (!rawDate || !rawChannel || !rawCount) continue;
+        if (!rawChannel || !rawCount) continue;
 
-        // Parse Data con formati multipli
-        let parsedDate = moment(rawDate, dateFormats, true);
+        // Gestione Data con Fill-Forward (se la cella data è vuota, usa l'ultima valida)
+        let dateKey = '';
         
-        // Se moment strict mode fallisce, proviamo non-strict per gestire formati Excel strani
-        if (!parsedDate.isValid()) {
-             parsedDate = moment(rawDate);
+        if (rawDate && rawDate.trim().length > 0) {
+            let parsedDate = moment(rawDate, dateFormats, true);
+            if (!parsedDate.isValid()) {
+                // Fallback lasco
+                parsedDate = moment(rawDate);
+            }
+
+            if (parsedDate.isValid()) {
+                dateKey = parsedDate.format('YYYY-MM-DD');
+                lastValidDateStr = dateKey;
+            }
+        }
+        
+        // Se non abbiamo trovato una data valida in questa riga, usiamo l'ultima valida
+        if (!dateKey && lastValidDateStr) {
+            dateKey = lastValidDateStr;
         }
 
-        if (!parsedDate.isValid()) continue;
-        const dateKey = parsedDate.format('YYYY-MM-DD');
+        // Se ancora non abbiamo una data, saltiamo la riga
+        if (!dateKey) continue;
 
         // Parse Nome Canale
         const normalizedKey = cleanCsvString(rawChannel).toLowerCase().trim();
         let mappedChannel = CHANNEL_NAME_MAPPING[normalizedKey];
         
         if (!mappedChannel) {
-            // Capitalize se non trovato nel mapping
             mappedChannel = cleanCsvString(rawChannel);
             if (mappedChannel.length > 0) {
                 mappedChannel = mappedChannel.charAt(0).toUpperCase() + mappedChannel.slice(1);
             }
         }
 
-        // Parse Conteggio (rimuove punti delle migliaia se presenti in formato europeo 1.000, ma fa attenzione ai decimali)
-        // Nel caso dei follower, assumiamo siano interi.
-        // Rimuoviamo qualsiasi cosa non sia un numero.
+        // Parse Conteggio
         const cleanCount = rawCount.replace(/[^0-9]/g, ''); 
         const count = parseInt(cleanCount, 10);
 
@@ -302,13 +316,11 @@ export const parseFollowersCsv = (csvContent: string): FollowerStat[] => {
             groupedStats[dateKey] = {};
         }
         
-        // Se per la stessa data e canale ci sono più righe (errore nel file), l'ultima vince
         groupedStats[dateKey][mappedChannel] = count;
     }
 
     // Converti la mappa aggregata in array FollowerStat
     return Object.entries(groupedStats).map(([date, channels]) => {
-        // Calcola totale base qui (ma verrà ricalcolato dal service se avviene un merge)
         const total = Object.entries(channels).reduce((acc, [name, val]) => {
             if (EXCLUDED_FROM_TOTAL.includes(name)) return acc;
             return acc + val;
@@ -319,5 +331,5 @@ export const parseFollowersCsv = (csvContent: string): FollowerStat[] => {
             channels,
             total
         };
-    }).sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf()); // Ordina per data crescente per la preview
+    }).sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf()); 
 };

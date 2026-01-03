@@ -9,6 +9,30 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.5.1',
+        date: '16/11/2025',
+        changes: [
+            'Fix minori: Migliorata la stabilità dell\'esportazione CSV e risolti piccoli bug visivi.',
+        ]
+    },
+    {
+        version: '2.5.0',
+        date: '15/11/2025',
+        changes: [
+            'Export Follower: Aggiunta la possibilità di esportare i dati dei follower in formato CSV (Excel).',
+            'Stampa Report Follower: Nuova funzione "Stampa PDF" nel pannello follower per generare un report pulito con soli grafici e KPI, nascondendo i controlli di modifica.'
+        ]
+    },
+    {
+        version: '2.4.0',
+        date: '15/11/2025',
+        changes: [
+            'Calcolatore Crescita Dinamico: Nel pannello Follower è ora presente una barra "Analisi Periodo". Puoi selezionare date precise (Dal... Al...) o usare i preset (1 Mese, 6 Mesi, 1 Anno).',
+            'KPI Precisi: I box "Crescita (Valore)" e "Crescita (%)" non mostrano più dati fissi, ma calcolano esattamente la variazione nel periodo selezionato dall\'utente.',
+            'Fix Statistiche: Risolto il problema per cui la crescita appariva come "0" quando i dati mancavano. Il sistema ora cerca automaticamente la rilevazione più vicina alle date scelte.'
+        ]
+    },
+    {
         version: '2.3.1',
         date: '14/11/2025',
         changes: [

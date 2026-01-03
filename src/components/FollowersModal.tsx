@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SocialChannel, FollowerStat } from '../types';
 import { addFollowerStat, subscribeToFollowerStats, deleteFollowerStat } from '../services/firestoreService';
