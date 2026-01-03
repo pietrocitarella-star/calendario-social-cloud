@@ -9,6 +9,14 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.3.1',
+        date: '14/11/2025',
+        changes: [
+            'Dettaglio Aggiornamento: Nel box "Monitoraggio Canali Diretti" (WhatsApp/Telegram), ora viene mostrata la data esatta dell\'ultimo dato inserito. Questo aiuta a capire se il numero visualizzato è recente o fermo a una data passata.',
+            'Anteprima CSV Intelligente: Migliorata la finestra di conferma importazione follower per mostrare un riepilogo più chiaro prima di salvare.'
+        ]
+    },
+    {
         version: '2.3.0',
         date: '14/11/2025',
         changes: [

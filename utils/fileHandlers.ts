@@ -1,5 +1,5 @@
 
-import { Post, PostStatus, PostType, TeamMember } from '../types';
+import { Post, PostStatus, PostType, TeamMember, FollowerStat } from '../types';
 import moment from 'moment';
 
 const getFormattedDate = () => {
@@ -78,115 +78,41 @@ export const exportPostsToCsv = (posts: Post[]) => {
 
 // --- CSV IMPORT LOGIC ---
 
-// Mappa colonne CSV (case insensitive) -> Proprietà Post (o chiavi interne temporanee)
-// AGGIORNATO: Aggiunte molte varianti per garantire flessibilità
 const CSV_MAPPING: Record<string, string> = {
-    // TITOLO
-    'titolo': 'title',
-    'title': 'title',
-    'oggetto': 'title',
-    'nome post': 'title',
-    
-    // DATA
-    'data': 'date',
-    'date': 'date',
-    'giorno': 'date',
-    'day': 'date',
-    
-    // ORA (Opzionale, viene unita alla data)
-    'ora': 'timeStr',
-    'orario': 'timeStr',
-    'time': 'timeStr',
-    
-    // CANALE
-    'social': 'social',
-    'canale': 'social',
-    'channel': 'social',
-    'piattaforma': 'social',
-    'network': 'social',
-    
-    // STATO
-    'stato': 'status',
-    'status': 'status',
-    'stato post': 'status',
-    
-    // TIPO
-    'tipo': 'postType',
-    'type': 'postType',
-    'post type': 'postType',
-    'tipologia': 'postType',
-    'formato': 'postType',
-    
-    // NOTE / COPY
-    'note': 'notes',
-    'notes': 'notes',
-    'copy': 'notes',
-    'testo': 'notes',
-    'descrizione': 'notes',
-    'caption': 'notes',
-    
-    // LINK ESTERNO (Destinazione)
-    'link': 'externalLink',
-    'externallink': 'externalLink',
-    'link esterno': 'externalLink',
-    'url': 'externalLink',
-    'link destinazione': 'externalLink',
-    'url post': 'externalLink',
-    'landing page': 'externalLink',
-    
-    // LINK CREATIVITÀ (Grafica/Video)
-    'creatività': 'creativityLink',
-    'creativita': 'creativityLink', // senza accento
-    'creativity': 'creativityLink',
-    'creativitylink': 'creativityLink',
-    'media': 'creativityLink',
-    'asset': 'creativityLink',
-    'grafica': 'creativityLink',
-    'link grafica': 'creativityLink',
-    'immagine': 'creativityLink',
-    'video': 'creativityLink',
-    
-    // ASSEGNATO A
-    'assegnato a': 'assignedTo',
-    'assegnato': 'assignedTo',
-    'assignedto': 'assignedTo',
-    'assigned': 'assignedTo',
-    'owner': 'assignedTo',
-    'chi': 'assignedTo',
-    'responsabile': 'assignedTo'
+    'titolo': 'title', 'title': 'title', 'oggetto': 'title', 'nome post': 'title',
+    'data': 'date', 'date': 'date', 'giorno': 'date', 'day': 'date',
+    'ora': 'timeStr', 'orario': 'timeStr', 'time': 'timeStr',
+    'social': 'social', 'canale': 'social', 'channel': 'social', 'piattaforma': 'social', 'network': 'social',
+    'stato': 'status', 'status': 'status', 'stato post': 'status',
+    'tipo': 'postType', 'type': 'postType', 'post type': 'postType', 'tipologia': 'postType', 'formato': 'postType',
+    'note': 'notes', 'notes': 'notes', 'copy': 'notes', 'testo': 'notes', 'descrizione': 'notes', 'caption': 'notes',
+    'link': 'externalLink', 'externallink': 'externalLink', 'link esterno': 'externalLink', 'url': 'externalLink', 'link destinazione': 'externalLink', 'url post': 'externalLink', 'landing page': 'externalLink',
+    'creatività': 'creativityLink', 'creativita': 'creativityLink', 'creativity': 'creativityLink', 'creativitylink': 'creativityLink', 'media': 'creativityLink', 'asset': 'creativityLink', 'grafica': 'creativityLink', 'link grafica': 'creativityLink', 'immagine': 'creativityLink', 'video': 'creativityLink',
+    'assegnato a': 'assignedTo', 'assegnato': 'assignedTo', 'assignedto': 'assignedTo', 'assigned': 'assignedTo', 'owner': 'assignedTo', 'chi': 'assignedTo', 'responsabile': 'assignedTo'
 };
 
-// Pulisce le stringhe da caratteri problematici (smart quotes, invisible chars)
-// Risolve problemi di apostrofi rotti (’) e virgolette curve (“ ”)
 const cleanCsvString = (str: string): string => {
     if (!str) return '';
     return str
-        .replace(/[\u2018\u2019]/g, "'") // Sostituisci Smart Single Quotes con apostrofo standard
-        .replace(/[\u201C\u201D]/g, '"') // Sostituisci Smart Double Quotes con virgolette standard
-        .replace(/\u2026/g, "...")     // Ellipsis
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/\u2026/g, "...")
         .trim();
 };
 
-// Funzione helper per parsare una riga CSV gestendo le virgolette
 const parseCsvLine = (line: string, delimiter: string): string[] => {
     const values = [];
     let current = '';
     let inQuotes = false;
-    
-    // Normalizziamo la riga prima del parsing per evitare che smart quotes rompano la logica CSV se usate impropriamente
-    // Manteniamo però intatta la struttura dei delimitatori
     const cleanedLine = line.replace(/[\u201C\u201D]/g, '"'); 
 
     for (let i = 0; i < cleanedLine.length; i++) {
         const char = cleanedLine[i];
-        
         if (char === '"') {
             if (inQuotes && cleanedLine[i + 1] === '"') {
-                // Doppie virgolette dentro una stringa quotata -> una virgoletta singola
                 current += '"';
                 i++;
             } else {
-                // Inizio o fine stringa quotata
                 inQuotes = !inQuotes;
             }
         } else if (char === delimiter && !inQuotes) {
@@ -201,128 +127,197 @@ const parseCsvLine = (line: string, delimiter: string): string[] => {
 };
 
 export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = []): Post[] => {
-    // Rimuove il BOM (Byte Order Mark) se presente all'inizio del file (comune in UTF-8 Excel)
     const cleanContent = csvContent.replace(/^\uFEFF/, '');
-    
     const lines = cleanContent.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length < 2) return [];
 
-    // Rileva delimitatore (virgola o punto e virgola)
     const firstLine = lines[0];
     const delimiter = firstLine.includes(';') ? ';' : ',';
-    
-    // Pulisce headers
     const headers = parseCsvLine(lines[0].toLowerCase(), delimiter).map(h => cleanCsvString(h).replace(/^"|"$/g, ''));
     
     const posts: Post[] = [];
 
     for (let i = 1; i < lines.length; i++) {
         const values = parseCsvLine(lines[i], delimiter);
-        
-        // Salta righe vuote o malformate
         if (values.length < 2) continue;
 
-        // Usiamo 'any' temporaneamente per gestire campi extra come 'timeStr'
         const postData: any = {
             status: PostStatus.Draft,
             postType: PostType.Post,
             history: []
         };
 
-        // GESTIONE INDIPENDENTE DALL'ORDINE DELLE COLONNE
         headers.forEach((header, index) => {
             const mappedKey = CSV_MAPPING[header];
-            
-            // Se l'header è riconosciuto e c'è un valore in quella posizione
             if (mappedKey && values[index] !== undefined) {
                 let value = values[index];
-                
-                // Rimuovi virgolette esterne
-                if (value.startsWith('"') && value.endsWith('"')) {
-                    value = value.slice(1, -1);
-                }
-                
-                // Applica pulizia caratteri speciali (smart quotes, etc.)
+                if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
                 value = cleanCsvString(value);
-                
-                // Fix specifico per link che a volte arrivano con spazi strani
-                if (mappedKey === 'externalLink' || mappedKey === 'creativityLink') {
-                     value = value.replace(/\s/g, ''); 
-                }
-
+                if (mappedKey === 'externalLink' || mappedKey === 'creativityLink') value = value.replace(/\s/g, ''); 
                 postData[mappedKey] = value;
             }
         });
 
-        // 1. GESTIONE DATA E ORA (Concatenazione)
         let finalDate = moment();
-        
-        // Formati accettati per la data
         const dateFormats = ['DD/MM/YYYY', 'YYYY-MM-DD', 'DD-MM-YYYY', 'D/M/YYYY', 'D-M-YYYY'];
-        // Formati accettati per data+ora insieme
         const dateTimeFormats = ['YYYY-MM-DDTHH:mm', 'DD/MM/YYYY HH:mm', 'YYYY-MM-DD HH:mm', 'DD-MM-YYYY HH:mm'];
 
         if (postData.date) {
             if (postData.timeStr) {
-                // Caso: Data e Ora in colonne separate
-                // Combina stringhe (es. "25/12/2025" + " " + "10:30")
-                // Pulizia ora (es. "10.30" -> "10:30")
                 const cleanTime = postData.timeStr.replace('.', ':');
                 const combinedString = `${postData.date} ${cleanTime}`;
-                
                 const parsed = moment(combinedString, dateTimeFormats.concat(['DD/MM/YYYY H:mm', 'YYYY-MM-DD H:mm']), true);
-                if (parsed.isValid()) {
-                    finalDate = parsed;
-                }
+                if (parsed.isValid()) finalDate = parsed;
             } else {
-                // Caso: Solo colonna Data (che potrebbe contenere l'ora)
                 const parsed = moment(postData.date, dateTimeFormats.concat(dateFormats), true);
-                if (parsed.isValid()) {
-                    finalDate = parsed;
-                }
+                if (parsed.isValid()) finalDate = parsed;
             }
         }
         postData.date = finalDate.format('YYYY-MM-DDTHH:mm');
-        delete postData.timeStr; // Pulizia campo temporaneo
+        delete postData.timeStr;
 
-        // 2. GESTIONE STATO
         if (postData.status) {
              const normalizedStatus = postData.status.toLowerCase();
              const matchedStatus = Object.values(PostStatus).find(s => s.toLowerCase() === normalizedStatus);
              if (matchedStatus) postData.status = matchedStatus;
         }
 
-        // 3. GESTIONE TIPO
         if (postData.postType) {
             const normalizedType = postData.postType.toLowerCase();
             const matchedType = Object.values(PostType).find(t => t.toLowerCase() === normalizedType);
             if (matchedType) postData.postType = matchedType;
         }
 
-        // 4. GESTIONE ASSEGNATO A (Risoluzione Nome -> ID)
         if (postData.assignedTo && teamMembers.length > 0) {
             const rawAssignee = postData.assignedTo.toLowerCase();
-            // Cerca per match esatto ID o match parziale nome
             const matchedMember = teamMembers.find(m => 
                 m.id === postData.assignedTo || 
                 m.name.toLowerCase().trim() === rawAssignee.trim() ||
                 m.name.toLowerCase().includes(rawAssignee.trim())
             );
-            
-            if (matchedMember) {
-                postData.assignedTo = matchedMember.id;
-            } else {
-                // Se non troviamo il membro (es. typo), rimuoviamo l'assegnazione
-                postData.assignedTo = undefined;
-            }
+            if (matchedMember) postData.assignedTo = matchedMember.id;
+            else postData.assignedTo = undefined;
         }
 
-        // Defaults finali
         if (!postData.title) postData.title = '(Senza Titolo)';
         if (!postData.social) postData.social = 'Generico'; 
 
         posts.push(postData as Post);
     }
-
     return posts;
+};
+
+// --- FOLLOWER STATS IMPORT LOGIC ---
+
+const CHANNEL_NAME_MAPPING: Record<string, string> = {
+    'fb': 'Facebook', 'facebook': 'Facebook', 'face': 'Facebook',
+    'ig': 'Instagram', 'insta': 'Instagram', 'instagram': 'Instagram',
+    'li': 'LinkedIn', 'linkedin': 'LinkedIn', 'linked': 'LinkedIn',
+    'tk': 'TikTok', 'tiktok': 'TikTok', 'tik': 'TikTok',
+    'yt': 'YouTube', 'youtube': 'YouTube', 'tube': 'YouTube',
+    'x': 'X', 'twitter': 'X',
+    'th': 'Threads', 'threads': 'Threads',
+    'wa': 'WhatsApp', 'whatsapp': 'WhatsApp',
+    'tg': 'Telegram', 'telegram': 'Telegram'
+};
+
+const EXCLUDED_FROM_TOTAL = ['WhatsApp', 'Telegram'];
+
+export const parseFollowersCsv = (csvContent: string): FollowerStat[] => {
+    // Rimuove BOM
+    const cleanContent = csvContent.replace(/^\uFEFF/, ''); 
+    const lines = cleanContent.split(/\r?\n/).filter(line => line.trim() !== '');
+    if (lines.length < 2) return [];
+
+    // DETERMINAZIONE DELIMITATORE (Punto e virgola vs Virgola)
+    // Controlliamo la prima riga (header) per vedere quale separatore è più frequente
+    const firstLine = lines[0];
+    const semicolonCount = (firstLine.match(/;/g) || []).length;
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const delimiter = semicolonCount >= commaCount ? ';' : ',';
+    
+    // Parse headers
+    const headers = parseCsvLine(lines[0].toLowerCase(), delimiter).map(h => cleanCsvString(h));
+    
+    // Cerchiamo le colonne chiave
+    const dateIdx = headers.findIndex(h => h.includes('data') || h.includes('date'));
+    const channelIdx = headers.findIndex(h => h.includes('canale') || h.includes('social') || h.includes('channel') || h.includes('piattaforma'));
+    const countIdx = headers.findIndex(h => h.includes('follower') || h.includes('count') || h.includes('numero') || h.includes('iscritti') || h.includes('valore'));
+
+    if (dateIdx === -1 || channelIdx === -1 || countIdx === -1) {
+        throw new Error(`Struttura CSV non valida. Colonne trovate: ${headers.join(', ')}. Richieste: Canale, Data, Follower.`);
+    }
+
+    const groupedStats: Record<string, Record<string, number>> = {};
+    const dateFormats = [
+        'DD/MM/YYYY', 'DD-MM-YYYY', 'D/M/YYYY', 'D-M-YYYY', // Italian formats
+        'YYYY-MM-DD', 'YYYY/MM/DD', // ISO formats
+        'MM/DD/YYYY' // US fallback
+    ];
+
+    for (let i = 1; i < lines.length; i++) {
+        const values = parseCsvLine(lines[i], delimiter);
+        
+        // Se la riga è vuota o ha meno colonne dell'indice massimo richiesto, salta
+        if (values.length <= Math.max(dateIdx, channelIdx, countIdx)) continue;
+
+        const rawDate = values[dateIdx];
+        const rawChannel = values[channelIdx];
+        const rawCount = values[countIdx];
+
+        if (!rawDate || !rawChannel || !rawCount) continue;
+
+        // Parse Data con formati multipli
+        let parsedDate = moment(rawDate, dateFormats, true);
+        
+        // Se moment strict mode fallisce, proviamo non-strict per gestire formati Excel strani
+        if (!parsedDate.isValid()) {
+             parsedDate = moment(rawDate);
+        }
+
+        if (!parsedDate.isValid()) continue;
+        const dateKey = parsedDate.format('YYYY-MM-DD');
+
+        // Parse Nome Canale
+        const normalizedKey = cleanCsvString(rawChannel).toLowerCase().trim();
+        let mappedChannel = CHANNEL_NAME_MAPPING[normalizedKey];
+        
+        if (!mappedChannel) {
+            // Capitalize se non trovato nel mapping
+            mappedChannel = cleanCsvString(rawChannel);
+            if (mappedChannel.length > 0) {
+                mappedChannel = mappedChannel.charAt(0).toUpperCase() + mappedChannel.slice(1);
+            }
+        }
+
+        // Parse Conteggio (rimuove punti delle migliaia se presenti in formato europeo 1.000, ma fa attenzione ai decimali)
+        // Nel caso dei follower, assumiamo siano interi.
+        // Rimuoviamo qualsiasi cosa non sia un numero.
+        const cleanCount = rawCount.replace(/[^0-9]/g, ''); 
+        const count = parseInt(cleanCount, 10);
+
+        if (isNaN(count)) continue;
+
+        if (!groupedStats[dateKey]) {
+            groupedStats[dateKey] = {};
+        }
+        
+        // Se per la stessa data e canale ci sono più righe (errore nel file), l'ultima vince
+        groupedStats[dateKey][mappedChannel] = count;
+    }
+
+    // Converti la mappa aggregata in array FollowerStat
+    return Object.entries(groupedStats).map(([date, channels]) => {
+        // Calcola totale base qui (ma verrà ricalcolato dal service se avviene un merge)
+        const total = Object.entries(channels).reduce((acc, [name, val]) => {
+            if (EXCLUDED_FROM_TOTAL.includes(name)) return acc;
+            return acc + val;
+        }, 0);
+
+        return {
+            date,
+            channels,
+            total
+        };
+    }).sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf()); // Ordina per data crescente per la preview
 };

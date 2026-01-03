@@ -338,17 +338,35 @@ export const subscribeToFollowerStats = (callback: (stats: FollowerStat[]) => vo
 export const addFollowerStat = async (stat: FollowerStat): Promise<void> => {
     try {
         const { id, ...data } = stat;
-        // Se esiste già una statistica per quella data, aggiorniamola invece di creare doppioni
+        // Controlla se esiste già un documento per questa data
         const q = query(collection(db, STATS_COLLECTION), where('date', '==', stat.date));
         const snapshot = await getDocs(q);
         
         if (!snapshot.empty) {
-            // Aggiorna esistente
-            const docId = snapshot.docs[0].id;
-            const docRef = doc(db, STATS_COLLECTION, docId);
-            await updateDoc(docRef, data);
+            // Aggiorna esistente con merge
+            const existingDoc = snapshot.docs[0];
+            const existingData = existingDoc.data() as FollowerStat;
+            
+            // Uniamo i canali: i nuovi sovrascrivono i vecchi solo se presenti
+            const mergedChannels = {
+                ...(existingData.channels || {}),
+                ...stat.channels
+            };
+            
+            // Ricalcoliamo il totale basato sui dati uniti
+            const EXCLUDED_FROM_TOTAL = ['WhatsApp', 'Telegram'];
+            const newTotal = Object.entries(mergedChannels).reduce((acc, [name, val]) => {
+                if (EXCLUDED_FROM_TOTAL.includes(name)) return acc;
+                return acc + (Number(val) || 0);
+            }, 0);
+
+            const docRef = doc(db, STATS_COLLECTION, existingDoc.id);
+            await updateDoc(docRef, {
+                channels: mergedChannels,
+                total: newTotal
+            });
         } else {
-            // Crea nuova
+            // Crea nuova registrazione
             await addDoc(collection(db, STATS_COLLECTION), data);
         }
     } catch (e) {

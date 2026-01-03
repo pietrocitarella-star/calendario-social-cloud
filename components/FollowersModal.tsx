@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { SocialChannel, FollowerStat } from '../types';
 import { addFollowerStat, subscribeToFollowerStats, deleteFollowerStat } from '../services/firestoreService';
+import { parseFollowersCsv } from '../utils/fileHandlers';
 import moment from 'moment';
 
 interface FollowersModalProps {
@@ -23,7 +24,6 @@ const FollowersLineChart: React.FC<{ data: { date: string, total: number }[], co
 
     const maxVal = Math.max(...data.map(d => d.total));
     const minVal = Math.min(...data.map(d => d.total));
-    // Aggiungiamo un po' di margine al range per estetica
     const range = maxVal - minVal || 1; 
     const buffer = range * 0.1;
     const effectiveMin = Math.max(0, minVal - buffer);
@@ -39,15 +39,10 @@ const FollowersLineChart: React.FC<{ data: { date: string, total: number }[], co
     return (
         <div className="w-full overflow-hidden">
             <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
-                {/* Grid Lines */}
                 <line x1={padding} y1={padding} x2={width-padding} y2={padding} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4" />
                 <line x1={padding} y1={height/2} x2={width-padding} y2={height/2} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4" />
                 <line x1={padding} y1={height-padding} x2={width-padding} y2={height-padding} stroke="#e5e7eb" strokeWidth="1" />
-
-                {/* Line */}
                 <polyline fill="none" stroke={color} strokeWidth="3" points={points} strokeLinecap="round" strokeLinejoin="round" />
-                
-                {/* Area under line (Gradient) */}
                 <defs>
                     <linearGradient id={`gradient-${color}`} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor={color} stopOpacity="0.2"/>
@@ -55,22 +50,18 @@ const FollowersLineChart: React.FC<{ data: { date: string, total: number }[], co
                     </linearGradient>
                 </defs>
                 <polygon points={`${padding},${height-padding} ${points} ${width-padding},${height-padding}`} fill={`url(#gradient-${color})`} />
-
-                {/* Dots & Labels */}
                 {data.map((d, i) => {
                     const x = padding + (i / (data.length - 1)) * (width - 2 * padding);
                     const y = height - padding - ((d.total - effectiveMin) / effectiveRange) * (height - 2 * padding);
                     return (
                         <g key={i} className="group cursor-pointer">
                             <circle cx={x} cy={y} r="5" fill="#fff" stroke={color} strokeWidth="2" />
-                            {/* Hover Value */}
                             <g className="opacity-0 group-hover:opacity-100 transition-opacity">
                                 <rect x={x - 30} y={y - 35} width="60" height="20" rx="4" fill="#1f2937" />
                                 <text x={x} y={y - 21} textAnchor="middle" fontSize="10" fill="#fff" fontWeight="bold">
                                     {d.total.toLocaleString()}
                                 </text>
                             </g>
-                            {/* Axis Date */}
                             <text x={x} y={height - 15} textAnchor="middle" fontSize="10" fill="#9ca3af" className="uppercase font-mono">
                                 {moment(d.date).format('MMM YY')}
                             </text>
@@ -83,7 +74,6 @@ const FollowersLineChart: React.FC<{ data: { date: string, total: number }[], co
 };
 
 const NetGrowthBarChart: React.FC<{ data: { date: string, total: number }[] }> = ({ data }) => {
-    // Calcoliamo la differenza netta rispetto al mese precedente
     const growthData = data.map((curr, i) => {
         if (i === 0) return { date: curr.date, diff: 0 };
         const prev = data[i-1];
@@ -96,7 +86,6 @@ const NetGrowthBarChart: React.FC<{ data: { date: string, total: number }[] }> =
     const width = 800;
     const height = 200;
     const padding = 40;
-    
     const maxAbs = Math.max(...growthData.map(d => Math.abs(d.diff)), 1); 
     const zeroY = height / 2; 
 
@@ -104,15 +93,12 @@ const NetGrowthBarChart: React.FC<{ data: { date: string, total: number }[] }> =
         <div className="w-full overflow-hidden">
             <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
                 <line x1={padding} y1={zeroY} x2={width-padding} y2={zeroY} stroke="#9ca3af" strokeWidth="1" />
-
                 {growthData.map((d, i) => {
                     const barWidth = ((width - 2 * padding) / growthData.length) * 0.5;
                     const x = padding + (i * ((width - 2 * padding) / growthData.length)) + ((width - 2 * padding) / growthData.length / 2) - (barWidth/2);
-                    
                     const barH = (Math.abs(d.diff) / maxAbs) * (height / 2 - padding);
                     const y = d.diff >= 0 ? zeroY - barH : zeroY;
                     const color = d.diff >= 0 ? '#10b981' : '#ef4444';
-
                     return (
                         <g key={i} className="group">
                             <rect x={x} y={y} width={barWidth} height={barH} fill={color} rx="2" />
@@ -138,6 +124,10 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
     
     // FILTRI
     const [activeFilters, setActiveFilters] = useState<string[]>([]);
+    
+    // IMPORT
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [previewData, setPreviewData] = useState<FollowerStat[] | null>(null);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -147,14 +137,11 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
         return () => unsubscribe();
     }, [isOpen]);
 
-    // Fill inputs on date change
     useEffect(() => {
         const existingEntry = stats.find(s => s.date === entryDate);
         if (existingEntry) {
             setInputValues(existingEntry.channels);
         } else {
-            // OPTIONAL: Pre-fill with last known values for better UX?
-            // For now, keep it clean to avoid confusion on what is saved.
             setInputValues({});
         }
     }, [entryDate, stats]);
@@ -177,11 +164,9 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
     };
 
     const handleSave = async () => {
-        // Calcolo totale "stupido" per il salvataggio nel DB (esclusi messaggistica per coerenza storica)
-        // Ma la logica di visualizzazione intelligente la facciamo nel render.
         const total = Object.entries(inputValues).reduce((acc, [name, count]) => {
             if (EXCLUDED_CHANNELS.includes(name)) return acc;
-            return acc + (count || 0);
+            return acc + (Number(count) || 0);
         }, 0);
         
         const newStat: FollowerStat = {
@@ -206,10 +191,57 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
         }
     };
 
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const content = e.target?.result;
+            if (typeof content !== 'string') return;
+
+            try {
+                const importedStats = parseFollowersCsv(content);
+                if (importedStats.length === 0) {
+                    alert("Nessun dato valido trovato nel file. Verifica che le colonne siano: Canale, Data, Follower.");
+                    return;
+                }
+                // Mostra anteprima invece di salvare subito
+                setPreviewData(importedStats);
+            } catch (err: any) {
+                alert("Errore durante la lettura del file: " + err.message);
+            } finally {
+                if (event.target) event.target.value = ''; // Reset input
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const confirmImport = async () => {
+        if (!previewData) return;
+        
+        let successCount = 0;
+        for (const stat of previewData) {
+            try {
+                await addFollowerStat(stat);
+                successCount++;
+            } catch (err) {
+                console.error(`Errore importazione data ${stat.date}:`, err);
+            }
+        }
+        alert(`Importazione completata! ${successCount} record aggregati/salvati.`);
+        setPreviewData(null);
+    };
+
+    const cancelImport = () => {
+        setPreviewData(null);
+    };
+
     // --- PROCESSO DATI "INTELLIGENTE" (FILL-FORWARD) ---
-    // 1. Ordina per data
-    // 2. Itera e riempie i buchi dei canali mancanti con l'ultimo valore noto
-    // 3. Filtra in base ai social selezionati
     const processedData = useMemo(() => {
         const sortedStats = [...stats].sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf());
         
@@ -217,17 +249,12 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
         let lastKnownValues: Record<string, number> = {};
 
         sortedStats.forEach(stat => {
-            // Aggiorna la memoria con i valori presenti in questo record
             lastKnownValues = { ...lastKnownValues, ...stat.channels };
 
-            // Determina quali canali sommare
             let channelsToSum: string[] = [];
-            
             if (activeFilters.length > 0) {
-                // Se ci sono filtri, somma SOLO quelli (inclusi WA/TG se selezionati)
                 channelsToSum = activeFilters;
             } else {
-                // Se nessun filtro, somma tutto TRANNE WA/TG
                 channelsToSum = channels
                     .map(c => c.name)
                     .filter(name => !EXCLUDED_CHANNELS.includes(name));
@@ -243,33 +270,46 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
             result.push({
                 date: stat.date,
                 total: computedTotal,
-                channels: { ...lastKnownValues } // Snapshot dello stato completo in quel momento
+                channels: { ...lastKnownValues }
             });
         });
 
         return result;
     }, [stats, activeFilters, channels]);
 
-    // KPI Calculation based on Processed Data (Last entry vs Previous entry)
     const latestData = processedData.length > 0 ? processedData[processedData.length - 1] : { total: 0 };
     const prevData = processedData.length > 1 ? processedData[processedData.length - 2] : { total: 0 };
     
     const currentTotal = latestData.total;
     const momDiff = currentTotal - prevData.total;
     const momGrowth = prevData.total > 0 ? (momDiff / prevData.total) * 100 : 0;
-
-    // YTD Calculation (Start of current year vs Now)
+    
     const currentYear = moment().year();
     const startOfYearData = processedData.find(d => moment(d.date).year() === currentYear);
     const ytdGrowth = startOfYearData && startOfYearData.total > 0 && currentTotal > 0
         ? ((currentTotal - startOfYearData.total) / startOfYearData.total) * 100 
         : 0;
 
+    // --- CALCOLO DATE ULTIMO AGGIORNAMENTO PER CANALI ESCLUSI ---
+    // Usiamo stats (dati grezzi) per trovare l'ultima volta che un canale è stato effettivamente inserito
+    const lastUpdateDates = useMemo(() => {
+        const dates: Record<string, string> = {};
+        // Ordiniamo stats in modo decrescente (più recente prima) per trovare la prima occorrenza
+        const sortedRawStats = [...stats].sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf());
+
+        EXCLUDED_CHANNELS.forEach(ch => {
+            const hit = sortedRawStats.find(s => s.channels[ch] !== undefined);
+            dates[ch] = hit ? moment(hit.date).format('DD/MM/YY') : '-';
+        });
+        return dates;
+    }, [stats]);
+
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-[80] p-4">
-            <div className="bg-gray-50 dark:bg-gray-800 w-full max-w-6xl rounded-2xl shadow-2xl flex flex-col max-h-[95vh]">
+            <div className="bg-gray-50 dark:bg-gray-800 w-full max-w-6xl rounded-2xl shadow-2xl flex flex-col max-h-[95vh] relative">
                 
                 {/* Header */}
                 <div className="p-6 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl flex justify-between items-center flex-shrink-0">
@@ -287,7 +327,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                 <div className="flex-grow overflow-y-auto custom-scrollbar p-6">
                     <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
                         
-                        {/* LEFT COLUMN: DATA ENTRY (1 Column on XL) */}
+                        {/* LEFT COLUMN: DATA ENTRY */}
                         <div className="xl:col-span-1 space-y-6">
                             <div className="bg-white dark:bg-gray-750 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
                                 <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
@@ -327,13 +367,23 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                                     })}
                                 </div>
 
-                                <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+                                <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-3">
                                     <button 
                                         onClick={handleSave}
                                         className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2"
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
                                         Salva Dati
+                                    </button>
+                                    
+                                    {/* Import Button */}
+                                    <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+                                    <button 
+                                        onClick={handleImportClick}
+                                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 text-sm"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                        Importa CSV
                                     </button>
                                 </div>
                             </div>
@@ -366,7 +416,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                             </div>
                         </div>
 
-                        {/* RIGHT COLUMN: ANALYTICS & CHARTS (3 Columns on XL) */}
+                        {/* RIGHT COLUMN: ANALYTICS */}
                         <div className="xl:col-span-3 space-y-6">
                             
                             {/* FILTER BAR */}
@@ -404,7 +454,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                                 )}
                             </div>
 
-                            {/* KPI CARDS (Dynamic based on filter) */}
+                            {/* KPI CARDS */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="bg-white dark:bg-gray-750 p-6 rounded-xl border-l-4 border-blue-500 shadow-sm relative overflow-hidden">
                                     <div className="absolute top-2 right-2 p-2 opacity-10 text-4xl text-blue-500">👥</div>
@@ -461,20 +511,22 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                                 </div>
                             </div>
                             
-                            {/* MESSAGING APPS MONITORING (Always visible separately if NOT filtered out explicitly, or if explicitly selected) */}
                             {activeFilters.length === 0 && (
                                 <div className="bg-blue-50 dark:bg-gray-800/50 p-4 rounded-xl border border-blue-100 dark:border-gray-700">
                                     <h3 className="font-bold text-gray-700 dark:text-gray-300 text-sm mb-3">💬 Monitoraggio Canali Diretti (Extra Report)</h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         {EXCLUDED_CHANNELS.map(ch => {
-                                            // Get latest data specifically for this channel from processed data (snapshot)
                                             const currVal = latestData.channels ? (latestData.channels[ch] || 0) : 0;
                                             const prevVal = prevData.channels ? (prevData.channels[ch] || 0) : 0;
                                             const diff = currVal - prevVal;
+                                            const lastDate = lastUpdateDates[ch];
                                             
                                             return (
                                                 <div key={ch} className="bg-white dark:bg-gray-700 p-3 rounded-lg shadow-sm flex justify-between items-center">
-                                                    <span className="font-medium text-gray-600 dark:text-gray-300">{ch}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium text-gray-600 dark:text-gray-300">{ch}</span>
+                                                        <span className="text-[10px] text-gray-400">Agg: {lastDate}</span>
+                                                    </div>
                                                     <div className="text-right">
                                                         <div className="font-bold text-lg text-gray-900 dark:text-white">{currVal.toLocaleString()}</div>
                                                         {diff !== 0 && (
@@ -493,6 +545,70 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                         </div>
                     </div>
                 </div>
+
+                {/* PREVIEW MODAL OVERLAY */}
+                {previewData && (
+                    <div className="absolute inset-0 bg-gray-900/90 backdrop-blur-sm z-[90] flex items-center justify-center p-6 rounded-2xl">
+                        <div className="bg-white dark:bg-gray-800 w-full max-w-3xl rounded-xl shadow-2xl flex flex-col max-h-full overflow-hidden">
+                            <div className="p-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-750 flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">Riepilogo Importazione</h3>
+                                    <p className="text-sm text-gray-500">Controlla i dati prima di confermare</p>
+                                </div>
+                                <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">
+                                    {previewData.length} righe rilevate
+                                </span>
+                            </div>
+                            
+                            <div className="flex-grow overflow-y-auto p-0">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 text-gray-500 dark:text-gray-300">
+                                        <tr>
+                                            <th className="px-6 py-3 font-medium">Data</th>
+                                            <th className="px-6 py-3 font-medium">Canali Trovati</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                        {previewData.map((stat, idx) => (
+                                            <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                                                <td className="px-6 py-4 font-bold text-gray-800 dark:text-gray-200">
+                                                    {moment(stat.date).format('DD/MM/YYYY')}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {Object.entries(stat.channels).map(([ch, count]) => (
+                                                            <span key={ch} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
+                                                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">{ch}</span>
+                                                                <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{count}</span>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="p-5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-750 flex justify-end gap-3">
+                                <button 
+                                    onClick={cancelImport}
+                                    className="px-5 py-2.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    Annulla
+                                </button>
+                                <button 
+                                    onClick={confirmImport}
+                                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg flex items-center gap-2"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                    Conferma Importazione
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
             </div>
         </div>
     );
