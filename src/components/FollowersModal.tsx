@@ -10,7 +10,7 @@ interface FollowersModalProps {
     channels: SocialChannel[];
 }
 
-const EXCLUDED_CHANNELS = ['WhatsApp', 'Telegram'];
+const EXCLUDED_CHANNELS: string[] = ['WhatsApp', 'Telegram'];
 
 // --- CUSTOM SVG CHARTS ---
 
@@ -342,8 +342,8 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
         const dates: Record<string, string> = {};
         const sortedRawStats = [...stats].sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf());
 
-        EXCLUDED_CHANNELS.forEach(ch => {
-            const hit = sortedRawStats.find(s => s.channels[ch] !== undefined);
+        EXCLUDED_CHANNELS.forEach((ch: string) => {
+            const hit = sortedRawStats.find(s => s.channels && (s.channels as Record<string, number>)[ch] !== undefined);
             dates[ch] = hit ? moment(hit.date).format('DD/MM/YY') : '-';
         });
         return dates;
@@ -372,7 +372,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
             return [
                 moment(row.date).format('DD/MM/YYYY'),
                 row.total,
-                ...allChannels.map(ch => row.channels[ch] || '')
+                ...allChannels.map(ch => (row.channels as Record<string, number>)[ch] || '')
             ].join(',');
         });
 
@@ -496,7 +496,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                                                 <input 
                                                     type="number" 
                                                     placeholder="0"
-                                                    value={inputValues[channel.name] || ''}
+                                                    value={(inputValues as Record<string, number>)[channel.name] || ''}
                                                     onChange={(e) => handleInputChange(channel.name, e.target.value)}
                                                     className="w-24 p-1.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
                                                 />
@@ -691,8 +691,8 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                                     <h3 className="font-bold text-gray-700 dark:text-gray-300 text-sm mb-3">💬 Monitoraggio Canali Diretti (Extra Report)</h3>
                                     <div className="grid grid-cols-2 gap-4">
                                         {EXCLUDED_CHANNELS.map((ch: string) => {
-                                            const currVal = latestData.channels ? (latestData.channels[ch] || 0) : 0;
-                                            const prevVal = prevData.channels ? (prevData.channels[ch] || 0) : 0;
+                                            const currVal = (latestData.channels as Record<string, number>)[ch] || 0;
+                                            const prevVal = (prevData.channels as Record<string, number>)[ch] || 0;
                                             const diff = currVal - prevVal;
                                             const lastDate = lastUpdateDates[ch];
                                             

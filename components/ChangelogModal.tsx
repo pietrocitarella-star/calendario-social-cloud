@@ -9,6 +9,14 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.6.0',
+        date: '17/11/2025',
+        changes: [
+            'Curiosità & Record: Nuova sezione nei report che svela statistiche interessanti come i "Weekend Warriors" (post nel fine settimana), il giorno preferito per pubblicare e la streak (costanza) record.',
+            'Filtro Netto Potenziato: Il menu di configurazione del KPI "Pubblicati (Netto)" ora rileva automaticamente tutti i canali presenti nei post, inclusi "Generico" o canali eliminati, permettendo un\'esclusione precisa al 100%.',
+        ]
+    },
+    {
         version: '2.5.1',
         date: '16/11/2025',
         changes: [
