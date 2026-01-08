@@ -246,10 +246,17 @@ const App: React.FC = () => {
 
     const events = useMemo(() => mapPostsToEvents(posts), [posts]);
 
+    // CALCOLO CANALI "FANTASMA" (Presenti nei post ma non nella lista ufficiale)
+    const ghostChannels = useMemo(() => {
+        const officialNames = socialChannels.map(c => c.name);
+        const allPostChannels = new Set(posts.map(p => p.social));
+        return Array.from(allPostChannels).filter(name => !officialNames.includes(name)).sort();
+    }, [posts, socialChannels]);
+
     const handleShowReports = async () => {
         setIsLoadingReportData(true);
-        const oneYearAgo = moment().subtract(1, 'year').format('YYYY-MM-DD');
-        const data = await fetchAllPosts(oneYearAgo);
+        // Carica tutto lo storico per i report, senza limitazioni temporali
+        const data = await fetchAllPosts();
         setReportPosts(data);
         setIsLoadingReportData(false);
         setIsReportsModalOpen(true);
@@ -878,6 +885,7 @@ const App: React.FC = () => {
                         onToggleStatus={toggleStatusFilter}
                         statusCounts={statusCounts}
                         onShowFollowers={() => setIsFollowersModalOpen(true)} // PASSATA FUNZIONE
+                        ghostChannels={ghostChannels} // NUOVA PROP: Canali fantasma
                     />
                     
                     {/* AGENDA BULK ACTIONS TOOLBAR */}

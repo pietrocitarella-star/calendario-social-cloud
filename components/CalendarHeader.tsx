@@ -24,7 +24,8 @@ interface CalendarHeaderProps {
   activeStatusFilters?: PostStatus[];
   onToggleStatus?: (status: PostStatus) => void;
   statusCounts?: Record<string, number>;
-  onShowFollowers?: () => void; // NUOVA PROP
+  onShowFollowers?: () => void;
+  ghostChannels?: string[]; // NUOVA PROP: Canali trovati nei post ma non nelle impostazioni
 }
 
 const CalendarHeader: React.FC<CalendarHeaderProps> = ({ 
@@ -47,7 +48,8 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
     activeStatusFilters = [],
     onToggleStatus,
     statusCounts = {},
-    onShowFollowers // NUOVA PROP
+    onShowFollowers,
+    ghostChannels = [] // Default array vuoto
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -84,7 +86,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 text-xs font-mono rounded-full transition-colors"
                         title="Vedi cronologia versioni"
                     >
-                        v2.6.0
+                        v2.7.0
                     </button>
                 )}
             </div>
@@ -244,9 +246,11 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
         {/* Quick Filters Row */}
         <div className="flex flex-col gap-3">
             {/* Canali Filters */}
-            {channels.length > 0 && onToggleChannel && (
+            {(channels.length > 0 || ghostChannels.length > 0) && onToggleChannel && (
                 <div className="flex flex-wrap gap-2 items-center bg-gray-50 dark:bg-gray-700/30 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
                     <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">Canali:</span>
+                    
+                    {/* Canali Ufficiali */}
                     {channels.map(channel => {
                         const isActive = activeFilters.includes(channel.name);
                         const isSelected = activeFilters.length > 0 ? isActive : true;
@@ -271,6 +275,32 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                             </button>
                         );
                     })}
+
+                    {/* Canali Fantasma (Es. 'Generico' o eliminati) */}
+                    {ghostChannels.length > 0 && (
+                        <>
+                            <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
+                            {ghostChannels.map(gName => {
+                                const isActive = activeFilters.includes(gName);
+                                return (
+                                    <button
+                                        key={gName}
+                                        onClick={() => onToggleChannel(gName)}
+                                        className={`
+                                            px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 border border-gray-300 dark:border-gray-500 flex items-center gap-1
+                                            ${isActive 
+                                                ? 'bg-gray-600 text-white shadow-sm' 
+                                                : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500'}
+                                        `}
+                                        title="Questo canale è presente nei post ma non nelle impostazioni"
+                                    >
+                                        ⚠️ {gName}
+                                    </button>
+                                );
+                            })}
+                        </>
+                    )}
+
                     {activeFilters.length > 0 && (
                         <button 
                             onClick={() => activeFilters.forEach(c => onToggleChannel(c))} 

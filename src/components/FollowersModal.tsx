@@ -150,30 +150,43 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
         }
     }, [entryDate, stats]);
 
-    // Inizializza le date di analisi quando arrivano i dati o cambia il range
+    // UPDATE DATE INPUTS BASED ON PRESET SELECTION
     useEffect(() => {
-        if (stats.length === 0) return;
-
-        // Se l'utente sta modificando manualmente, non sovrascrivere
         if (analysisRange === 'CUSTOM') return;
 
-        const sorted = [...stats].sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf());
-        const lastDate = moment(sorted[sorted.length - 1].date);
-        
+        // End Date is always end of LAST month
+        const end = moment().subtract(1, 'months').endOf('month');
         let start = moment();
-        
+
         switch (analysisRange) {
-            case '1M': start = lastDate.clone().subtract(1, 'months'); break;
-            case '3M': start = lastDate.clone().subtract(3, 'months'); break;
-            case '6M': start = lastDate.clone().subtract(6, 'months'); break;
-            case '1A': start = lastDate.clone().subtract(1, 'years'); break;
-            default: start = lastDate.clone().subtract(1, 'months');
+            case '1M': // Ultimo mese completo
+                start = moment().subtract(1, 'months').startOf('month');
+                break;
+            case '3M': // Ultimi 3 mesi completi
+                start = moment().subtract(3, 'months').startOf('month');
+                break;
+            case '6M': // Ultimi 6 mesi completi
+                start = moment().subtract(6, 'months').startOf('month');
+                break;
+            case '1A': // Ultimi 12 mesi completi
+                start = moment().subtract(12, 'months').startOf('month');
+                break;
+            default:
+                start = moment().subtract(1, 'months').startOf('month');
         }
 
-        setAnalysisEndDate(lastDate.format('YYYY-MM-DD'));
         setAnalysisStartDate(start.format('YYYY-MM-DD'));
+        setAnalysisEndDate(end.format('YYYY-MM-DD'));
         
-    }, [stats, analysisRange]);
+    }, [analysisRange]); // Trigger only when range changes
+
+    // INITIAL LOAD DEFAULT
+    useEffect(() => {
+        if(stats.length > 0 && !analysisStartDate) {
+             setAnalysisRange('1M');
+        }
+    }, [stats]);
+
 
     const handleInputChange = (channelName: string, value: string) => {
         setInputValues(prev => ({
@@ -303,30 +316,31 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
             });
         });
 
+        // FILTRO FINALE SUL PERIODO (Usando le date impostate dagli input)
+        if (analysisStartDate && analysisEndDate) {
+            const start = moment(analysisStartDate).startOf('day');
+            const end = moment(analysisEndDate).endOf('day');
+            return result.filter(d => moment(d.date).isBetween(start, end, undefined, '[]'));
+        }
+
         return result;
-    }, [stats, activeFilters, channels]);
+    }, [stats, activeFilters, channels, analysisStartDate, analysisEndDate]);
 
     const latestData = processedData.length > 0 
         ? processedData[processedData.length - 1] 
         : { total: 0, channels: {} as Record<string, number>, date: '' };
     
+    // DEFINIZIONE PREVDATA
     const prevData = processedData.length > 1 
         ? processedData[processedData.length - 2] 
         : { total: 0, channels: {} as Record<string, number>, date: '' };
-    
-    // CALCOLO CRESCITA SUL PERIODO SELEZIONATO
+
+    // Per il calcolo della crescita, prendiamo il primo e l'ultimo dato del periodo filtrato
     const periodGrowthStats = useMemo(() => {
-        if (processedData.length === 0) return { diff: 0, percent: 0, startVal: 0, endVal: 0 };
+        if (processedData.length < 2) return { diff: 0, percent: 0, startVal: 0, endVal: 0 };
 
-        let endRecord = processedData.filter(d => moment(d.date).isSameOrBefore(analysisEndDate)).pop();
-        if (!endRecord) endRecord = processedData[processedData.length - 1];
-
-        let startRecord = processedData.find(d => moment(d.date).isSameOrAfter(analysisStartDate));
-        if (!startRecord) startRecord = processedData[0];
-
-        if (moment(startRecord.date).isAfter(endRecord.date)) {
-             return { diff: 0, percent: 0, startVal: 0, endVal: 0 };
-        }
+        const startRecord = processedData[0];
+        const endRecord = processedData[processedData.length - 1];
 
         const startVal = startRecord.total;
         const endVal = endRecord.total;
@@ -334,7 +348,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
         const percent = startVal > 0 ? (diff / startVal) * 100 : 0;
 
         return { diff, percent, startVal, endVal };
-    }, [processedData, analysisStartDate, analysisEndDate]);
+    }, [processedData]);
 
 
     // --- CALCOLO DATE ULTIMO AGGIORNAMENTO PER CANALI ESCLUSI ---
@@ -343,7 +357,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
         const sortedRawStats = [...stats].sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf());
 
         EXCLUDED_CHANNELS.forEach((ch: string) => {
-            const hit = sortedRawStats.find(s => s.channels && (s.channels as Record<string, number>)[ch] !== undefined);
+            const hit = sortedRawStats.find(s => s.channels && s.channels[ch] !== undefined);
             dates[ch] = hit ? moment(hit.date).format('DD/MM/YY') : '-';
         });
         return dates;
@@ -364,7 +378,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
         }
 
         // Determina quali colonne esportare (Data, Totale, e i singoli canali rilevati)
-        const allChannels = Array.from(new Set(processedData.flatMap(d => Object.keys(d.channels)))).sort();
+        const allChannels: string[] = Array.from(new Set(processedData.flatMap(d => Object.keys(d.channels)))).sort() as string[];
         
         const headers = ['Data', 'Totale', ...allChannels];
         
@@ -372,7 +386,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
             return [
                 moment(row.date).format('DD/MM/YYYY'),
                 row.total,
-                ...allChannels.map(ch => (row.channels as Record<string, number>)[ch] || '')
+                ...allChannels.map((ch: string) => (row.channels as Record<string, number>)[ch] || '')
             ].join(',');
         });
 
@@ -496,8 +510,8 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                                                 <input 
                                                     type="number" 
                                                     placeholder="0"
-                                                    value={(inputValues as Record<string, number>)[channel.name] || ''}
-                                                    onChange={(e) => handleInputChange(channel.name, e.target.value)}
+                                                    value={inputValues[String(channel.name)] || ''}
+                                                    onChange={(e) => handleInputChange(String(channel.name), e.target.value)}
                                                     className="w-24 p-1.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
                                                 />
                                             </div>
@@ -597,32 +611,39 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
 
                                 {/* 2. DATE RANGE ANALYZER */}
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                    <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
-                                        <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1 whitespace-nowrap">Analisi Periodo:</span>
-                                        {(['1M', '3M', '6M', '1A'] as const).map((range) => (
-                                            <button
-                                                key={range}
-                                                onClick={() => setAnalysisRange(range)}
-                                                className={`px-3 py-1 rounded-md text-xs font-bold border transition-colors ${analysisRange === range ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600'}`}
-                                            >
-                                                {range}
-                                            </button>
-                                        ))}
+                                    <div className="flex-grow">
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Periodo Predefinito:</span>
+                                        <div className="flex flex-wrap gap-2">
+                                            {(['1M', '3M', '6M', '1A'] as const).map((range) => (
+                                                <button
+                                                    key={range}
+                                                    onClick={() => setAnalysisRange(range)}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${analysisRange === range ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                                                >
+                                                    {range === '1M' ? 'Ultimo Mese' : range === '3M' ? '3 Mesi' : range === '6M' ? '6 Mesi' : '1 Anno'}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <input 
-                                            type="date" 
-                                            value={analysisStartDate}
-                                            onChange={(e) => { setAnalysisStartDate(e.target.value); setAnalysisRange('CUSTOM'); }}
-                                            className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                        />
-                                        <span className="text-gray-400">→</span>
-                                        <input 
-                                            type="date" 
-                                            value={analysisEndDate}
-                                            onChange={(e) => { setAnalysisEndDate(e.target.value); setAnalysisRange('CUSTOM'); }}
-                                            className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                                        />
+                                    <div className="flex gap-2">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Dal</label>
+                                            <input 
+                                                type="date" 
+                                                value={analysisStartDate}
+                                                onChange={(e) => { setAnalysisStartDate(e.target.value); setAnalysisRange('CUSTOM'); }}
+                                                className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Al</label>
+                                            <input 
+                                                type="date" 
+                                                value={analysisEndDate}
+                                                onChange={(e) => { setAnalysisEndDate(e.target.value); setAnalysisRange('CUSTOM'); }}
+                                                className="px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 

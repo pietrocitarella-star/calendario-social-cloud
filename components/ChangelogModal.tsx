@@ -9,6 +9,15 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.7.0',
+        date: '18/11/2025',
+        changes: [
+            'Filtri Temporali Unificati: Uniformata la logica dei filtri rapidi (es. "Ultimo Mese") tra le sezioni Report e Follower. Ora entrambi calcolano i periodi basandosi sui mesi solari completi passati.',
+            'Feedback Visivo Date: Quando si seleziona un filtro veloce (es. "Ultimi 3 Mesi"), i campi data "Dal" e "Al" si compilano automaticamente, mostrando chiaramente all\'utente l\'esatto intervallo temporale analizzato.',
+            'Refactoring UI: Migliorata la barra dei controlli nella finestra Follower per renderla coerente con quella dei Report.'
+        ]
+    },
+    {
         version: '2.6.0',
         date: '17/11/2025',
         changes: [

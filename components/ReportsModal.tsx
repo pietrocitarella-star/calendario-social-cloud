@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Post, SocialChannel, PostStatus, PostType, TeamMember } from '../types';
 import { STATUS_COLORS } from '../constants';
 import moment from 'moment';
@@ -245,25 +245,65 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         });
     };
 
+    // UPDATE DATE INPUTS BASED ON PRESET SELECTION
+    useEffect(() => {
+        if (timeRange === 'CUSTOM' || timeRange === 'ALL' || timeRange === 'YEAR') return;
+
+        // End Date is always end of LAST month
+        const end = moment().subtract(1, 'months').endOf('month');
+        let start = moment();
+
+        switch (timeRange) {
+            case '1M': 
+                start = moment().subtract(1, 'months').startOf('month');
+                break;
+            case '3M': 
+                start = moment().subtract(3, 'months').startOf('month');
+                break;
+            case '6M': 
+                start = moment().subtract(6, 'months').startOf('month');
+                break;
+            case '1A': 
+                start = moment().subtract(12, 'months').startOf('month');
+                break;
+            default:
+                start = moment().subtract(1, 'months').startOf('month');
+        }
+
+        setCustomStartDate(start.format('YYYY-MM-DD'));
+        setCustomEndDate(end.format('YYYY-MM-DD'));
+        
+    }, [timeRange]); // Trigger only when range changes
+
+    // INITIAL LOAD DEFAULT
+    useEffect(() => {
+        if(posts.length > 0 && !customStartDate && timeRange !== 'ALL') {
+             // Force initialization
+             // If you want default to be 6M:
+             setTimeRange('6M');
+        }
+    }, [posts]);
+
     const filteredPosts = useMemo(() => {
         let result = posts;
-        const now = moment();
         
-        if (timeRange === 'CUSTOM') {
-            if (customStartDate && customEndDate) {
-                const start = moment(customStartDate).startOf('day'); 
-                const end = moment(customEndDate).endOf('day');
-                result = result.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
-            }
+        // FILTRAGGIO DATA
+        // Se è 'ALL', non filtriamo.
+        // Se è 'YEAR', filtriamo per l'anno selezionato manualmente
+        // Per tutti gli altri casi (CUSTOM e PRESET), usiamo customStartDate e customEndDate che ora sono sincronizzati
+        
+        if (timeRange === 'ALL') {
+            // No date filter
         } else if (timeRange === 'YEAR') {
             const start = moment().year(selectedYear).startOf('year'); 
             const end = moment().year(selectedYear).endOf('year');
             result = result.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
-        } else if (timeRange !== 'ALL') {
-            const rangeMap: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1A': 12 };
-            if (rangeMap[timeRange]) {
-                 const cutoff = now.clone().subtract(rangeMap[timeRange], 'months');
-                 result = result.filter(p => moment(p.date).isAfter(cutoff));
+        } else {
+            // Case CUSTOM or PRESETS (1M, 3M, etc - now handled via state)
+            if (customStartDate && customEndDate) {
+                const start = moment(customStartDate).startOf('day'); 
+                const end = moment(customEndDate).endOf('day');
+                result = result.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
             }
         }
 
