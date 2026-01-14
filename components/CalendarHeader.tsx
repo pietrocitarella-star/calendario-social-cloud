@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { SocialChannel, AppNotification, PostStatus } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { SocialChannel, AppNotification, PostStatus, Post } from '../types';
 import { POST_STATUSES, STATUS_COLORS } from '../constants';
 import moment from 'moment';
 
@@ -25,7 +25,12 @@ interface CalendarHeaderProps {
   onToggleStatus?: (status: PostStatus) => void;
   statusCounts?: Record<string, number>;
   onShowFollowers?: () => void;
-  ghostChannels?: string[]; // NUOVA PROP: Canali trovati nei post ma non nelle impostazioni
+  ghostChannels?: string[];
+  
+  // PROPS PER LA RICERCA GLOBALE AVANZATA
+  allPosts?: Post[]; 
+  onSearchResultSelect?: (post: Post) => void; 
+  onSearchSubmit?: () => void; // NUOVO: Trigger per la vista completa
 }
 
 const CalendarHeader: React.FC<CalendarHeaderProps> = ({ 
@@ -36,7 +41,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
     onExportJson, 
     onExportCsv, 
     onImport,
-    searchTerm,
+    searchTerm = '',
     onSearchChange,
     fileInputRef,
     channels = [],
@@ -49,17 +54,26 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
     onToggleStatus,
     statusCounts = {},
     onShowFollowers,
-    ghostChannels = [] // Default array vuoto
+    ghostChannels = [],
+    allPosts = [],
+    onSearchResultSelect,
+    onSearchSubmit
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  
   const notificationRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
-  // Close notifications when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
             setShowNotifications(false);
+        }
+        if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+            setShowSearchResults(false);
         }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -70,6 +84,50 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
 
   const handleCsvClick = () => {
       csvInputRef.current?.click();
+  };
+
+  // LOGICA RICERCA "SPOTLIGHT"
+  // Filtra tutti i post disponibili per il conteggio totale
+  const totalMatches = useMemo(() => {
+      if (!searchTerm || searchTerm.length < 2 || !allPosts) return [];
+      const lowerTerm = searchTerm.toLowerCase();
+      return allPosts.filter(p => p.title.toLowerCase().includes(lowerTerm) || (p.notes && p.notes.toLowerCase().includes(lowerTerm)));
+  }, [searchTerm, allPosts]);
+
+  // Dropdown mostra solo i primi 5 per non intasare, il resto va in "Vedi tutti"
+  const dropdownResults = useMemo(() => {
+      return totalMatches
+          .sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf())
+          .slice(0, 5); 
+  }, [totalMatches]);
+
+  useEffect(() => {
+      if (searchTerm.length >= 2) {
+          setShowSearchResults(true);
+      } else {
+          setShowSearchResults(false);
+      }
+  }, [searchTerm]);
+
+  const handleResultClick = (post: Post) => {
+      if (onSearchResultSelect) {
+          onSearchResultSelect(post);
+          setShowSearchResults(false);
+      }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter' && onSearchSubmit && searchTerm.length >= 2) {
+          setShowSearchResults(false);
+          onSearchSubmit();
+      }
+  };
+
+  const handleViewAllClick = () => {
+      if (onSearchSubmit) {
+          setShowSearchResults(false);
+          onSearchSubmit();
+      }
   };
 
   return (
@@ -86,14 +144,16 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 text-xs font-mono rounded-full transition-colors"
                         title="Vedi cronologia versioni"
                     >
-                        v2.7.0
+                        v2.8.0
                     </button>
                 )}
             </div>
             
             <div className="flex items-center gap-3 flex-wrap justify-center xl:justify-end w-full">
+                
+                {/* SEARCH BAR AVANZATA */}
                 {onSearchChange && (
-                    <div className="relative flex-grow max-w-xs min-w-[200px]">
+                    <div className="relative flex-grow max-w-xs min-w-[200px]" ref={searchRef}>
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
@@ -101,11 +161,70 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         </div>
                         <input
                             type="text"
-                            placeholder="Cerca post..."
+                            placeholder="Cerca post (Invio per tutti)..."
                             value={searchTerm}
                             onChange={(e) => onSearchChange(e.target.value)}
+                            onFocus={() => { if(searchTerm.length >= 2) setShowSearchResults(true); }}
+                            onKeyDown={handleKeyDown}
                             className="pl-10 pr-4 py-2 w-full border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
                         />
+                        
+                        {/* DROPDOWN RISULTATI */}
+                        {showSearchResults && dropdownResults.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-[100] max-h-96 overflow-hidden flex flex-col">
+                                <div className="p-2 border-b border-gray-100 dark:border-gray-700 text-[10px] uppercase font-bold text-gray-400 bg-gray-50 dark:bg-gray-900/50 flex justify-between">
+                                    <span>Anteprima ({dropdownResults.length} di {totalMatches.length})</span>
+                                    <span className="text-[9px]">Premi Invio per tutti</span>
+                                </div>
+                                <ul className="overflow-y-auto max-h-60">
+                                    {dropdownResults.map(post => {
+                                        const channel = channels.find(c => c.name === post.social);
+                                        const color = channel ? channel.color : '#9ca3af';
+                                        return (
+                                            <li key={post.id}>
+                                                <button
+                                                    onClick={() => handleResultClick(post)}
+                                                    className="w-full text-left px-3 py-2.5 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-700 last:border-0 flex items-center justify-between group"
+                                                >
+                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                        <div 
+                                                            className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                                                            style={{ backgroundColor: color }}
+                                                            title={post.social}
+                                                        ></div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                                                                {post.title}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                                                <span>{moment(post.date).format('DD MMM YY')}</span>
+                                                                <span>•</span>
+                                                                <span className="capitalize">{post.social}</span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-shrink-0 ml-2">
+                                                        <span className={`w-2 h-2 block rounded-full ${STATUS_COLORS[post.status]}`} title={post.status}></span>
+                                                    </div>
+                                                </button>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                                {/* Pulsante VEDI TUTTI */}
+                                <button 
+                                    onClick={handleViewAllClick}
+                                    className="p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm font-bold text-center hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors border-t border-blue-100 dark:border-blue-800"
+                                >
+                                    Vedi tutti i {totalMatches.length} risultati
+                                </button>
+                            </div>
+                        )}
+                        {showSearchResults && searchTerm.length >= 2 && dropdownResults.length === 0 && (
+                             <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-[100] p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                 Nessun post trovato.
+                             </div>
+                        )}
                     </div>
                 )}
 

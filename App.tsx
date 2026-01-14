@@ -36,7 +36,7 @@ const SocialChannelsModal = lazy(() => import('./components/SocialChannelsModal'
 const TeamMembersModal = lazy(() => import('./components/TeamMembersModal'));
 const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
 const DayDetailsModal = lazy(() => import('./components/DayDetailsModal'));
-const FollowersModal = lazy(() => import('./components/FollowersModal')); // NUOVA IMPORTAZIONE
+const FollowersModal = lazy(() => import('./components/FollowersModal')); 
 
 moment.locale('it');
 moment.updateLocale('it', {
@@ -95,6 +95,10 @@ const App: React.FC = () => {
     const [authLoading, setAuthLoading] = useState(true);
 
     const [posts, setPosts] = useState<Post[]>([]); 
+    // Indice globale per la ricerca (contiene tutti i post, non solo quelli visualizzati)
+    const [globalSearchIndex, setGlobalSearchIndex] = useState<Post[]>([]);
+    const [isSearchMode, setIsSearchMode] = useState(false); // NUOVO STATO RICERCA
+    
     const [reportPosts, setReportPosts] = useState<Post[]>([]); 
     const [isLoadingReportData, setIsLoadingReportData] = useState(false);
 
@@ -115,7 +119,7 @@ const App: React.FC = () => {
     const [isChannelsModalOpen, setIsChannelsModalOpen] = useState(false);
     const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
     const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
-    const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false); // STATO NUOVA MODALE
+    const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false); 
     
     const [dayModalData, setDayModalData] = useState<{ isOpen: boolean, date: Date | null, posts: Post[] }>({
         isOpen: false,
@@ -207,6 +211,7 @@ const App: React.FC = () => {
         }
     }, [isAuthorized]);
 
+    // LOAD POSTS FOR CALENDAR VIEW (Optimized window)
     useEffect(() => {
         if (!user || !isAuthorized) {
             setPosts([]);
@@ -221,6 +226,20 @@ const App: React.FC = () => {
         });
         return () => unsubscribe(); 
     }, [user, isAuthorized, date, view]);
+
+    // LOAD GLOBAL INDEX FOR SEARCH (All history)
+    useEffect(() => {
+        if (!user || !isAuthorized) {
+            setGlobalSearchIndex([]);
+            return;
+        }
+        // Carichiamo tutti i post una tantum all'avvio (o quando cambia auth) per la ricerca
+        const loadSearchIndex = async () => {
+            const allData = await fetchAllPosts();
+            setGlobalSearchIndex(allData);
+        };
+        loadSearchIndex();
+    }, [user, isAuthorized]);
 
     useEffect(() => {
         if (!user || !isAuthorized) {
@@ -253,9 +272,19 @@ const App: React.FC = () => {
         return Array.from(allPostChannels).filter(name => !officialNames.includes(name)).sort();
     }, [posts, socialChannels]);
 
+    // CALCOLO RISULTATI RICERCA GLOBALI (per la vista dedicata)
+    const searchResults = useMemo(() => {
+        if (!searchTerm || searchTerm.length < 2) return [];
+        const lowerTerm = searchTerm.toLowerCase();
+        // Filtriamo su TUTTO lo storico (globalSearchIndex), non solo sui post del calendario
+        return globalSearchIndex
+            .filter(p => p.title.toLowerCase().includes(lowerTerm) || (p.notes && p.notes.toLowerCase().includes(lowerTerm)))
+            .sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf()); // Dal più recente
+    }, [searchTerm, globalSearchIndex]);
+
     const handleShowReports = async () => {
         setIsLoadingReportData(true);
-        // Carica tutto lo storico per i report, senza limitazioni temporali
+        // Carica tutto lo storico per i report
         const data = await fetchAllPosts();
         setReportPosts(data);
         setIsLoadingReportData(false);
@@ -270,6 +299,30 @@ const App: React.FC = () => {
     const handleExportCsv = async () => {
         const allData = await fetchAllPosts();
         exportPostsToCsv(allData);
+    };
+
+    // --- NUOVA FUNZIONE RICERCA GLOBALE ---
+    const handleSearchResultSelect = (post: Post) => {
+        // Se siamo in modalità ricerca, rimaniamo lì ma apriamo il modale.
+        // Se l'utente clicca dal dropdown (senza essere in search mode), andiamo al calendario.
+        if (!isSearchMode) {
+            const postDate = new Date(post.date);
+            setDate(postDate);
+        }
+        
+        setTimeout(() => {
+            setSelectedEvent(post);
+            setIsPostModalOpen(true);
+        }, 100);
+    };
+
+    const handleSearchSubmit = () => {
+        setIsSearchMode(true);
+    };
+
+    const handleBackToCalendar = () => {
+        setIsSearchMode(false);
+        setSearchTerm(''); // Opzionale: pulire la ricerca quando si torna indietro? Meglio di sì per chiarezza.
     };
 
     const notifications = useMemo<AppNotification[]>(() => {
@@ -314,78 +367,70 @@ const App: React.FC = () => {
         }
     }, [posts]);
 
-    // FILTER LOGIC
+    // FILTER LOGIC (For calendar view)
     const filteredEvents = useMemo(() => {
         let result = events;
-        // 1. Text Search
-        if (searchTerm.trim()) {
+        // Text Search visual filter for current view (only if NOT in search mode, otherwise handled by view)
+        if (searchTerm.trim() && !isSearchMode) {
             const lowerTerm = searchTerm.toLowerCase();
             result = result.filter(event => 
                 event.title.toLowerCase().includes(lowerTerm) || 
                 (event.notes && event.notes.toLowerCase().includes(lowerTerm))
             );
         }
-        // 2. Channel Filter
+        // Channel Filter
         if (activeChannelFilters.length > 0) {
             result = result.filter(event => activeChannelFilters.includes(event.social));
         }
-        // 3. Status Filter
+        // Status Filter
         if (activeStatusFilters.length > 0) {
             result = result.filter(event => activeStatusFilters.includes(event.status));
         }
         return result;
-    }, [events, searchTerm, activeChannelFilters, activeStatusFilters]);
+    }, [events, searchTerm, isSearchMode, activeChannelFilters, activeStatusFilters]);
     
-    // Status Counts Calculation (Dynamic based on Search, Channels AND Current View Date Range)
+    // Status Counts Calculation
     const statusCounts = useMemo(() => {
         const counts: Record<string, number> = {};
         
-        // Base list for counting: Filtered by Search and Channels
-        let baseList = posts;
-        if (searchTerm.trim()) {
-            const lowerTerm = searchTerm.toLowerCase();
-            baseList = baseList.filter(p => 
-                p.title.toLowerCase().includes(lowerTerm) || 
-                (p.notes && p.notes.toLowerCase().includes(lowerTerm))
-            );
-        }
-        if (activeChannelFilters.length > 0) {
-            baseList = baseList.filter(p => activeChannelFilters.includes(p.social));
-        }
+        // Se siamo in search mode, contiamo i risultati della ricerca. Altrimenti i post della view.
+        let baseList = isSearchMode ? searchResults : posts;
 
-        // --- NEW: FILTER BY CURRENT VIEW RANGE ---
-        let start, end;
-        
-        // Calculate the range based on current view
-        if (view === Views.MONTH) {
-            start = moment(date).startOf('month');
-            end = moment(date).endOf('month');
-        } else if (view === Views.WEEK) {
-            start = moment(date).startOf('week');
-            end = moment(date).endOf('week');
-        } else {
-            // Day or Agenda view defaults to current day (or agenda range logic if preferred, keeping simple for now)
-            start = moment(date).startOf('day');
-            end = moment(date).endOf('day');
-            
-            // Per Agenda, potremmo voler mostrare il mese corrente o un range specifico, 
-            // ma per coerenza con la vista "lista", spesso si intende il periodo visibile. 
-            // Se in Agenda mostriamo una lista infinita, forse ha senso il mese corrente o l'anno.
-            // Qui usiamo la logica: se Agenda, consideriamo il mese corrente per dare un contesto utile,
-            // oppure (migliore) i prossimi 30 giorni dalla data selezionata.
-            if (view === Views.AGENDA) {
-                end = moment(date).add(30, 'days');
+        if (!isSearchMode) {
+            // Apply visual filters for Calendar
+            if (searchTerm.trim()) {
+                const lowerTerm = searchTerm.toLowerCase();
+                baseList = baseList.filter(p => 
+                    p.title.toLowerCase().includes(lowerTerm) || 
+                    (p.notes && p.notes.toLowerCase().includes(lowerTerm))
+                );
             }
-        }
+            if (activeChannelFilters.length > 0) {
+                baseList = baseList.filter(p => activeChannelFilters.includes(p.social));
+            }
 
-        // Apply Date Range Filter
-        baseList = baseList.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
+            let start, end;
+            if (view === Views.MONTH) {
+                start = moment(date).startOf('month');
+                end = moment(date).endOf('month');
+            } else if (view === Views.WEEK) {
+                start = moment(date).startOf('week');
+                end = moment(date).endOf('week');
+            } else {
+                start = moment(date).startOf('day');
+                end = moment(date).endOf('day');
+                if (view === Views.AGENDA) {
+                    end = moment(date).add(30, 'days');
+                }
+            }
+            baseList = baseList.filter(p => moment(p.date).isBetween(start, end, undefined, '[]'));
+        }
 
         baseList.forEach(p => {
             counts[p.status] = (counts[p.status] || 0) + 1;
         });
         return counts;
-    }, [posts, searchTerm, activeChannelFilters, date, view]); // Added date and view as dependencies
+    }, [posts, searchResults, isSearchMode, searchTerm, activeChannelFilters, date, view]);
 
     const toggleChannelFilter = useCallback((channelName: string) => {
         setActiveChannelFilters(prev => {
@@ -418,13 +463,10 @@ const App: React.FC = () => {
     }, []);
 
     const handleSelectSlot = useCallback(({ start }: { start: Date }) => {
-        // BUG FIX: Se è attivo il blocco interazione (perché abbiamo appena cliccato "mostra post"), usciamo.
         if (interactionBlockerRef.current) {
             interactionBlockerRef.current = false;
             return;
         }
-
-        // Se siamo in modalità selezione multipla, non aprire il modale nuovo post cliccando slot vuoti
         if (isSelectionMode) return;
 
         if (socialChannels.length === 0) {
@@ -442,7 +484,6 @@ const App: React.FC = () => {
     }, [socialChannels, isSelectionMode]);
 
     const handleSelectEvent = useCallback((event: CalendarEvent) => {
-        // Se siamo in modalità selezione multipla, non aprire il modale dettaglio
         if (isSelectionMode) return;
 
         const post = posts.find(p => p.id === event.id);
@@ -494,26 +535,38 @@ const App: React.FC = () => {
         } else {
             await addPost(postToSave);
         }
+        // Aggiorna anche l'indice di ricerca locale per feedback immediato (opzionale, ma utile)
+        const updatedIndex = [...globalSearchIndex];
+        const idx = updatedIndex.findIndex(p => p.id === postToSave.id);
+        if (idx >= 0) updatedIndex[idx] = postToSave;
+        else updatedIndex.push(postToSave);
+        setGlobalSearchIndex(updatedIndex);
+
         closePostModal();
-    }, [closePostModal, posts]);
+    }, [closePostModal, posts, globalSearchIndex]);
     
     const handleDeletePost = useCallback(async (id: string) => {
         if (!id) return;
         await deletePost(id);
+        
+        // Rimuovi dall'indice di ricerca
+        setGlobalSearchIndex(prev => prev.filter(p => p.id !== id));
+        
         closePostModal();
     }, [closePostModal]);
 
-    // PREPARA ELIMINAZIONE MASSIVA: Apre Modale
     const handleBulkDeleteClick = useCallback(() => {
         if (selectedPostIds.length === 0) return;
         setIsBulkDeleteModalOpen(true);
     }, [selectedPostIds]);
 
-    // ESEGUE ELIMINAZIONE MASSIVA
     const performBulkDelete = useCallback(async () => {
         if (selectedPostIds.length === 0) return;
         try {
             await deletePostsBulk(selectedPostIds);
+            // Aggiorna indice ricerca
+            setGlobalSearchIndex(prev => prev.filter(p => !selectedPostIds.includes(p.id || '')));
+            
             setSelectedPostIds([]);
             setIsSelectionMode(false);
             setIsBulkDeleteModalOpen(false);
@@ -526,7 +579,6 @@ const App: React.FC = () => {
     const handleToggleSelectionMode = useCallback(() => {
         setIsSelectionMode(prev => {
             if (prev) {
-                // Se stiamo disattivando, puliamo la selezione
                 setSelectedPostIds([]);
             }
             return !prev;
@@ -639,6 +691,8 @@ const App: React.FC = () => {
     const confirmImport = async () => {
         if (importPreview && importPreview.data) {
             await savePostsToStorage(importPreview.data);
+            // Aggiorna anche l'indice di ricerca globale
+            setGlobalSearchIndex(prev => [...prev, ...(importPreview.data || [])]);
             setImportPreview(null);
             if (importPreview.type === 'csv') {
                 alert(`Importazione completata! ${importPreview.valid} post sono stati aggiunti al calendario.`);
@@ -884,12 +938,16 @@ const App: React.FC = () => {
                         activeStatusFilters={activeStatusFilters}
                         onToggleStatus={toggleStatusFilter}
                         statusCounts={statusCounts}
-                        onShowFollowers={() => setIsFollowersModalOpen(true)} // PASSATA FUNZIONE
-                        ghostChannels={ghostChannels} // NUOVA PROP: Canali fantasma
+                        onShowFollowers={() => setIsFollowersModalOpen(true)}
+                        ghostChannels={ghostChannels}
+                        // NUOVE PROPS PER RICERCA GLOBALE
+                        allPosts={globalSearchIndex}
+                        onSearchResultSelect={handleSearchResultSelect}
+                        onSearchSubmit={handleSearchSubmit} // PASSATA FUNZIONE SUBMIT
                     />
                     
-                    {/* AGENDA BULK ACTIONS TOOLBAR */}
-                    {view === Views.AGENDA && (
+                    {/* AGENDA BULK ACTIONS TOOLBAR (Visibile solo in view Agenda) */}
+                    {view === Views.AGENDA && !isSearchMode && (
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-3 rounded-lg flex items-center justify-between animate-fadeIn">
                             <div className="flex items-center gap-3">
                                 <h3 className="text-sm font-bold text-blue-800 dark:text-blue-200 flex items-center gap-2">
@@ -934,12 +992,95 @@ const App: React.FC = () => {
                     <StatusLegend />
                 </div>
 
-                <div className="flex-grow min-h-0 bg-white dark:bg-gray-800 rounded-lg shadow-lg relative p-2 md:p-4 overflow-hidden">
-                    <Calendar
-                        style={{ height: '100%' }}
-                        localizer={localizer} culture='it' events={filteredEvents} startAccessor="start" endAccessor="end" view={view} onView={setView} date={date} onNavigate={setDate} views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]} selectable scrollToTime={defaultScrollTime} onSelectSlot={handleSelectSlot} onSelectEvent={handleSelectEvent} eventPropGetter={eventPropGetter} messages={calendarMessages} formats={calendarFormats} popup={false} onDrillDown={handleDrillDown} onShowMore={handleShowMore} dayLayoutAlgorithm="no-overlap" 
-                        components={components}
-                    />
+                <div className="flex-grow min-h-0 bg-white dark:bg-gray-800 rounded-lg shadow-lg relative p-2 md:p-4 overflow-hidden flex flex-col">
+                    {/* RENDER CONDIZIONALE: CALENDARIO O RISULTATI RICERCA */}
+                    {isSearchMode ? (
+                        <div className="flex flex-col h-full animate-fadeIn">
+                            <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
+                                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                    Risultati Ricerca: "{searchTerm}"
+                                    <span className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">{searchResults.length}</span>
+                                </h2>
+                                <button 
+                                    onClick={handleBackToCalendar}
+                                    className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium transition-colors"
+                                >
+                                    Chiudi ricerca
+                                </button>
+                            </div>
+                            
+                            <div className="overflow-y-auto flex-grow custom-scrollbar space-y-3 pr-2">
+                                {searchResults.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <p>Nessun post trovato per "{searchTerm}"</p>
+                                    </div>
+                                ) : (
+                                    searchResults.map(post => {
+                                        const statusColor = STATUS_COLORS[post.status];
+                                        const assignee = teamMembers.find(m => m.id === post.assignedTo);
+                                        const channel = socialChannels.find(c => c.name === post.social);
+                                        const channelColor = channel ? channel.color : '#9ca3af';
+
+                                        return (
+                                            <div 
+                                                key={post.id} 
+                                                onClick={() => { handleSearchResultSelect(post); }}
+                                                className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors cursor-pointer group"
+                                            >
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                    <div className="flex items-start gap-3 flex-grow min-w-0">
+                                                        <div className="flex flex-col items-center min-w-[50px] pt-1">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase">{moment(post.date).format('MMM')}</span>
+                                                            <span className="text-xl font-bold text-gray-700 dark:text-gray-200 leading-none">{moment(post.date).format('DD')}</span>
+                                                            <span className="text-[10px] text-gray-400">{moment(post.date).format('YYYY')}</span>
+                                                        </div>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                                <span 
+                                                                    className="text-[10px] font-bold text-white px-2 py-0.5 rounded shadow-sm uppercase tracking-wide"
+                                                                    style={{ backgroundColor: channelColor }}
+                                                                >
+                                                                    {post.social}
+                                                                </span>
+                                                                <h3 className="font-semibold text-gray-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate">
+                                                                    {post.title}
+                                                                </h3>
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">
+                                                                {post.notes || 'Nessuna nota...'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 flex-shrink-0 pl-14 sm:pl-0">
+                                                        <div className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase text-white ${statusColor}`}>
+                                                            {post.status}
+                                                        </div>
+                                                        {assignee && (
+                                                            <div 
+                                                                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-sm" 
+                                                                style={{ backgroundColor: assignee.color }}
+                                                                title={`Assegnato a: ${assignee.name}`}
+                                                            >
+                                                                {assignee.name.substring(0, 1).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <Calendar
+                            style={{ height: '100%' }}
+                            localizer={localizer} culture='it' events={filteredEvents} startAccessor="start" endAccessor="end" view={view} onView={setView} date={date} onNavigate={setDate} views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]} selectable scrollToTime={defaultScrollTime} onSelectSlot={handleSelectSlot} onSelectEvent={handleSelectEvent} eventPropGetter={eventPropGetter} messages={calendarMessages} formats={calendarFormats} popup={false} onDrillDown={handleDrillDown} onShowMore={handleShowMore} dayLayoutAlgorithm="no-overlap" 
+                            components={components}
+                        />
+                    )}
                 </div>
             </div>
             

@@ -9,6 +9,15 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.8.0',
+        date: '20/11/2025',
+        changes: [
+            'Ricerca Globale Storica: Il motore di ricerca è stato potenziato. Ora scansiona l\'intero archivio storico (inclusi anni passati come il 2023) e non solo i mesi visualizzati nel calendario.',
+            'Modalità "Spotlight": Digitando nella barra, appare un menu rapido intelligente. Cliccando su un risultato, il calendario salta istantaneamente alla data di quel post, anche se è di 2 anni fa.',
+            'Vista Risultati Dedicata: Premendo INVIO o "Vedi tutti", l\'interfaccia passa a una modalità "Risultati di Ricerca" esclusiva, elencando tutti i match trovati in ordine cronologico. Perfetto per trovare "tutti i post di Natale" degli ultimi 3 anni in un colpo solo.'
+        ]
+    },
+    {
         version: '2.7.0',
         date: '18/11/2025',
         changes: [
