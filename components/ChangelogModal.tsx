@@ -9,6 +9,14 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.8.1',
+        date: '21/11/2025',
+        changes: [
+            'Importazione Intelligente: Il sistema ora riconosce automaticamente abbreviazioni e varianti dei canali durante l\'import CSV (es. IG, Insta -> Instagram; FB -> Facebook; Twitter -> X).',
+            'Automazione Telegram: Importando post da CSV con canale "Telegram", il tipo di contenuto viene automaticamente impostato su "Aggiornamento", risparmiando tempo di categorizzazione manuale.'
+        ]
+    },
+    {
         version: '2.8.0',
         date: '20/11/2025',
         changes: [

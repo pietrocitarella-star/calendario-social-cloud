@@ -78,6 +78,57 @@ export const exportPostsToCsv = (posts: Post[]) => {
 
 // --- CSV IMPORT LOGIC ---
 
+// Mappa estesa per la normalizzazione dei nomi dei canali
+const CHANNEL_NORMALIZATION_MAP: Record<string, string> = {
+    // Facebook
+    'fb': 'Facebook', 'facebook': 'Facebook', 'face': 'Facebook',
+    // Instagram
+    'ig': 'Instagram', 'insta': 'Instagram', 'instagram': 'Instagram',
+    // LinkedIn
+    'li': 'LinkedIn', 'linkedin': 'LinkedIn', 'linked': 'LinkedIn', 'ln': 'LinkedIn',
+    // X / Twitter
+    'x': 'X', 'twitter': 'X', 'tw': 'X', 'tweet': 'X',
+    // YouTube
+    'yt': 'YouTube', 'youtube': 'YouTube', 'tube': 'YouTube', 'yotube': 'YouTube',
+    // WhatsApp
+    'wa': 'WhatsApp', 'whatsapp': 'WhatsApp', 'wapp': 'WhatsApp', 'what': 'WhatsApp',
+    // Telegram
+    'tg': 'Telegram', 'telegram': 'Telegram', 'tele': 'Telegram',
+    // TikTok
+    'tk': 'TikTok', 'tiktok': 'TikTok', 'tik': 'TikTok',
+    // Threads
+    'th': 'Threads', 'threads': 'Threads',
+    // Pinterest
+    'pin': 'Pinterest', 'pinterest': 'Pinterest'
+};
+
+const cleanCsvString = (str: string): string => {
+    if (!str) return '';
+    return str
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/\u2026/g, "...")
+        .trim();
+};
+
+const normalizeChannelName = (rawName: string): string => {
+    if (!rawName) return 'Generico';
+    
+    // Pulisce la stringa, rimuove spazi e mette tutto in minuscolo per il confronto
+    const normalizedKey = cleanCsvString(rawName).toLowerCase().replace(/\s/g, ''); 
+    
+    // 1. Controllo mappatura esatta
+    if (CHANNEL_NORMALIZATION_MAP[normalizedKey]) {
+        return CHANNEL_NORMALIZATION_MAP[normalizedKey];
+    }
+
+    // 2. Fallback intelligente: Capitalizza la prima lettera
+    // Es. "pinterest" -> "Pinterest", "snapchat" -> "Snapchat"
+    // Questo gestisce casi non mappati ma scritti "decentemente"
+    const cleaned = cleanCsvString(rawName);
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
 const CSV_MAPPING: Record<string, string> = {
     'titolo': 'title', 'title': 'title', 'oggetto': 'title', 'nome post': 'title',
     'data': 'date', 'date': 'date', 'giorno': 'date', 'day': 'date',
@@ -89,15 +140,6 @@ const CSV_MAPPING: Record<string, string> = {
     'link': 'externalLink', 'externallink': 'externalLink', 'link esterno': 'externalLink', 'url': 'externalLink', 'link destinazione': 'externalLink', 'url post': 'externalLink', 'landing page': 'externalLink',
     'creatività': 'creativityLink', 'creativita': 'creativityLink', 'creativity': 'creativityLink', 'creativitylink': 'creativityLink', 'media': 'creativityLink', 'asset': 'creativityLink', 'grafica': 'creativityLink', 'link grafica': 'creativityLink', 'immagine': 'creativityLink', 'video': 'creativityLink',
     'assegnato a': 'assignedTo', 'assegnato': 'assignedTo', 'assignedto': 'assignedTo', 'assigned': 'assignedTo', 'owner': 'assignedTo', 'chi': 'assignedTo', 'responsabile': 'assignedTo'
-};
-
-const cleanCsvString = (str: string): string => {
-    if (!str) return '';
-    return str
-        .replace(/[\u2018\u2019]/g, "'")
-        .replace(/[\u201C\u201D]/g, '"')
-        .replace(/\u2026/g, "...")
-        .trim();
 };
 
 const parseCsvLine = (line: string, delimiter: string): string[] => {
@@ -153,10 +195,24 @@ export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = 
                 let value = values[index];
                 if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
                 value = cleanCsvString(value);
-                if (mappedKey === 'externalLink' || mappedKey === 'creativityLink') value = value.replace(/\s/g, ''); 
-                postData[mappedKey] = value;
+                
+                if (mappedKey === 'externalLink' || mappedKey === 'creativityLink') {
+                    value = value.replace(/\s/g, ''); 
+                }
+                
+                // Normalizzazione intelligente del Canale Social
+                if (mappedKey === 'social') {
+                    postData[mappedKey] = normalizeChannelName(value);
+                } else {
+                    postData[mappedKey] = value;
+                }
             }
         });
+
+        // 1. REGOLE SPECIALI PER TELEGRAM
+        if (postData.social === 'Telegram') {
+            postData.postType = PostType.Update;
+        }
 
         let finalDate = moment();
         const dateFormats = ['DD/MM/YYYY', 'YYYY-MM-DD', 'DD-MM-YYYY', 'D/M/YYYY', 'D-M-YYYY'];
@@ -182,10 +238,13 @@ export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = 
              if (matchedStatus) postData.status = matchedStatus;
         }
 
-        if (postData.postType) {
-            const normalizedType = postData.postType.toLowerCase();
-            const matchedType = Object.values(PostType).find(t => t.toLowerCase() === normalizedType);
-            if (matchedType) postData.postType = matchedType;
+        // Se non è stato forzato da Telegram, prova a parsare il tipo
+        if (!postData.postType || (postData.postType === PostType.Post && postData.social !== 'Telegram')) {
+            if (postData.postType) { // Se c'era un valore stringa grezzo
+                const normalizedType = postData.postType.toLowerCase();
+                const matchedType = Object.values(PostType).find(t => t.toLowerCase() === normalizedType);
+                if (matchedType) postData.postType = matchedType;
+            }
         }
 
         if (postData.assignedTo && teamMembers.length > 0) {
@@ -208,18 +267,6 @@ export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = 
 };
 
 // --- FOLLOWER STATS IMPORT LOGIC ---
-
-const CHANNEL_NAME_MAPPING: Record<string, string> = {
-    'fb': 'Facebook', 'facebook': 'Facebook', 'face': 'Facebook',
-    'ig': 'Instagram', 'insta': 'Instagram', 'instagram': 'Instagram',
-    'li': 'LinkedIn', 'linkedin': 'LinkedIn', 'linked': 'LinkedIn',
-    'tk': 'TikTok', 'tiktok': 'TikTok', 'tik': 'TikTok',
-    'yt': 'YouTube', 'youtube': 'YouTube', 'tube': 'YouTube',
-    'x': 'X', 'twitter': 'X',
-    'th': 'Threads', 'threads': 'Threads',
-    'wa': 'WhatsApp', 'whatsapp': 'WhatsApp',
-    'tg': 'Telegram', 'telegram': 'Telegram'
-};
 
 const EXCLUDED_FROM_TOTAL = ['WhatsApp', 'Telegram'];
 
@@ -295,16 +342,8 @@ export const parseFollowersCsv = (csvContent: string): FollowerStat[] => {
         // Se ancora non abbiamo una data, saltiamo la riga
         if (!dateKey) continue;
 
-        // Parse Nome Canale
-        const normalizedKey = cleanCsvString(rawChannel).toLowerCase().trim();
-        let mappedChannel = CHANNEL_NAME_MAPPING[normalizedKey];
-        
-        if (!mappedChannel) {
-            mappedChannel = cleanCsvString(rawChannel);
-            if (mappedChannel.length > 0) {
-                mappedChannel = mappedChannel.charAt(0).toUpperCase() + mappedChannel.slice(1);
-            }
-        }
+        // Parse Nome Canale: USIAMO LA NUOVA FUNZIONE DI NORMALIZZAZIONE
+        const mappedChannel = normalizeChannelName(rawChannel);
 
         // Parse Conteggio
         const cleanCount = rawCount.replace(/[^0-9]/g, ''); 
