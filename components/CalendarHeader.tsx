@@ -37,7 +37,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
     onAddPost, 
     onShowReports, 
     onShowChannels, 
-    onShowTeam,
+    onShowTeam, 
     onExportJson, 
     onExportCsv, 
     onImport,
@@ -144,7 +144,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 text-xs font-mono rounded-full transition-colors"
                         title="Vedi cronologia versioni"
                     >
-                        v2.8.1
+                        v2.8.2
                     </button>
                 )}
             </div>

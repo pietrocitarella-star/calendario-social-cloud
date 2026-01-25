@@ -9,6 +9,14 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.8.2',
+        date: '21/11/2025',
+        changes: [
+            'Validazione CSV Avanzata: Il sistema ora controlla rigorosamente la correttezza delle date nel file importato. Errori comuni (es. anni a 5 cifre, typo come "202ò") vengono normalizzati automaticamente dove possibile.',
+            'Report Errori Importazione: Se un post ha una data o un formato non recuperabile, non viene più importato con la data odierna. Al contrario, viene mostrata una lista rossa degli errori specificando la riga e il motivo, permettendo di correggere il file prima di procedere.',
+        ]
+    },
+    {
         version: '2.8.1',
         date: '21/11/2025',
         changes: [

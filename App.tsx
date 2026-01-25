@@ -22,7 +22,7 @@ import {
     migrateCollaborationData
 } from './services/firestoreService';
 import { STATUS_COLORS, ALLOWED_EMAILS } from './constants';
-import { exportPostsToJson, exportPostsToCsv, parseCsvToPosts } from './utils/fileHandlers';
+import { exportPostsToJson, exportPostsToCsv, parseCsvToPosts, ImportError } from './utils/fileHandlers';
 import CalendarHeader from './components/CalendarHeader';
 import CustomToolbar from './components/CustomToolbar';
 import StatusLegend from './components/StatusLegend';
@@ -139,6 +139,7 @@ const App: React.FC = () => {
         valid: number;
         invalid: number;
         data: Post[];
+        errors: ImportError[]; // Nuovo campo errori
     } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     
@@ -615,19 +616,27 @@ const App: React.FC = () => {
 
             try {
                 let sanitizedPosts: Post[] = [];
+                let importErrors: ImportError[] = [];
                 let validCount = 0;
                 let invalidCount = 0;
                 let totalRecords = 0;
 
                 if (isCsv) {
-                    const parsed = parseCsvToPosts(content, teamMembers);
-                    totalRecords = parsed.length;
-                    sanitizedPosts = parsed.map(p => {
+                    const result = parseCsvToPosts(content, teamMembers);
+                    
+                    // Separa i risultati validi dagli errori
+                    sanitizedPosts = result.validPosts.map(p => {
                         const { id, ...rest } = p;
                         return rest as Post;
                     });
+                    importErrors = result.errors;
+                    
                     validCount = sanitizedPosts.length;
+                    invalidCount = importErrors.length;
+                    totalRecords = validCount + invalidCount;
+
                 } else {
+                    // JSON Logic (Keep simple, assume valid dates for JSON backups)
                     let importedData;
                     try {
                         importedData = JSON.parse(content);
@@ -663,17 +672,21 @@ const App: React.FC = () => {
                         }
                     });
                 }
-                if (validCount === 0) {
-                    alert("Il file non contiene nessun post valido da importare.");
+                
+                if (validCount === 0 && invalidCount === 0) {
+                    alert("Il file non contiene nessun post importabile.");
                     return;
                 }
+
                 setImportPreview({
                     type: isCsv ? 'csv' : 'json',
                     total: totalRecords,
                     valid: validCount,
                     invalid: invalidCount,
-                    data: sanitizedPosts
+                    data: sanitizedPosts,
+                    errors: importErrors
                 });
+
             } catch (error) {
                 console.error("Errore generico importazione:", error);
                 alert("Si è verificato un errore imprevisto durante la lettura del file.");
@@ -693,10 +706,11 @@ const App: React.FC = () => {
             await savePostsToStorage(importPreview.data);
             // Aggiorna anche l'indice di ricerca globale
             setGlobalSearchIndex(prev => [...prev, ...(importPreview.data || [])]);
+            
+            const importedCount = importPreview.valid;
             setImportPreview(null);
-            if (importPreview.type === 'csv') {
-                alert(`Importazione completata! ${importPreview.valid} post sono stati aggiunti al calendario.`);
-            }
+            
+            alert(`Importazione completata! ${importedCount} post sono stati aggiunti al calendario.`);
         }
     };
 
@@ -1109,13 +1123,52 @@ const App: React.FC = () => {
                 )}
             </Suspense>
             {importPreview && (
-                <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-md text-center">
-                        <h3 className="text-xl font-bold mb-2">Conferma Importazione</h3>
-                        <p className="text-sm text-gray-500 mb-6">Record pronti: {importPreview.valid}</p>
-                        <div className="flex gap-3">
-                            <button onClick={cancelImport} className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg text-gray-800 dark:text-white transition-colors">Annulla</button>
-                            <button onClick={confirmImport} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold transition-colors shadow-lg">Conferma</button>
+                <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-xl text-center flex flex-col max-h-[90vh]">
+                        <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">Anteprima Importazione</h3>
+                        
+                        <div className="flex justify-around items-center my-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
+                            <div className="text-center">
+                                <span className="block text-2xl font-bold text-green-600 dark:text-green-400">{importPreview.valid}</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">Validi</span>
+                            </div>
+                            {importPreview.errors && importPreview.errors.length > 0 && (
+                                <div className="text-center">
+                                    <span className="block text-2xl font-bold text-red-600 dark:text-red-400">{importPreview.errors.length}</span>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">Errori</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {importPreview.errors && importPreview.errors.length > 0 && (
+                            <div className="mb-4 text-left overflow-hidden flex flex-col">
+                                <h4 className="text-sm font-bold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                    Errori rilevati ({importPreview.errors.length})
+                                </h4>
+                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 overflow-y-auto max-h-40 text-xs">
+                                    {importPreview.errors.map((err, idx) => (
+                                        <div key={idx} className="mb-2 last:mb-0 pb-2 border-b border-red-100 dark:border-red-800 last:border-0">
+                                            <span className="font-bold text-red-700 dark:text-red-300">Riga {err.row}: </span>
+                                            <span className="text-red-600 dark:text-red-200">{err.message}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-2 italic">I record con errori verranno ignorati. Puoi correggere il file e riprovare, oppure procedere importando solo quelli validi.</p>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 mt-4">
+                            <button onClick={cancelImport} className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg text-gray-800 dark:text-white transition-colors hover:bg-gray-300 dark:hover:bg-gray-500">
+                                Annulla
+                            </button>
+                            <button 
+                                onClick={confirmImport} 
+                                disabled={importPreview.valid === 0}
+                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold transition-colors shadow-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Importa Validi ({importPreview.valid})
+                            </button>
                         </div>
                     </div>
                 </div>

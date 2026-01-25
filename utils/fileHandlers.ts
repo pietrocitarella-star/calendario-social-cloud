@@ -2,6 +2,17 @@
 import { Post, PostStatus, PostType, TeamMember, FollowerStat } from '../types';
 import moment from 'moment';
 
+export interface ImportError {
+    row: number;
+    data: any;
+    message: string;
+}
+
+export interface CsvParseResult {
+    validPosts: Post[];
+    errors: ImportError[];
+}
+
 const getFormattedDate = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -129,6 +140,32 @@ const normalizeChannelName = (rawName: string): string => {
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 };
 
+const normalizeDateString = (rawDate: string): string => {
+    if (!rawDate) return '';
+    
+    let cleaned = rawDate.trim().toLowerCase();
+
+    // 1. Correzione Typos comuni tastiera italiana
+    // 'ò', 'à', 'è' vengono spesso premuti al posto di numeri o simboli vicini
+    cleaned = cleaned.replace(/ò/g, '0');
+    cleaned = cleaned.replace(/à/g, '0');
+    
+    // 2. Normalizzazione Separatori
+    // Sostituisce punti, trattini bassi o spazi anomali con slash o trattini standard
+    cleaned = cleaned.replace(/[._]/g, '/');
+
+    // 3. Correzione Anni "Lunghi" (es. 20255 -> 2025)
+    // Cerca una sequenza di 5 cifre alla fine della stringa o seguita da spazio
+    // Esempio: 12/12/20255 -> 12/12/2025
+    cleaned = cleaned.replace(/\/(\d{4})\d\b/, '/$1');
+    cleaned = cleaned.replace(/-(\d{4})\d\b/, '-$1');
+
+    // 4. Correzione Anni "Corti" a inizio stringa (es. 20255-12-12)
+    cleaned = cleaned.replace(/^(\d{4})\d-/, '$1-');
+
+    return cleaned;
+};
+
 const CSV_MAPPING: Record<string, string> = {
     'titolo': 'title', 'title': 'title', 'oggetto': 'title', 'nome post': 'title',
     'data': 'date', 'date': 'date', 'giorno': 'date', 'day': 'date',
@@ -168,26 +205,29 @@ const parseCsvLine = (line: string, delimiter: string): string[] => {
     return values;
 };
 
-export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = []): Post[] => {
+export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = []): CsvParseResult => {
     const cleanContent = csvContent.replace(/^\uFEFF/, '');
     const lines = cleanContent.split(/\r?\n/).filter(line => line.trim() !== '');
-    if (lines.length < 2) return [];
+    if (lines.length < 2) return { validPosts: [], errors: [] };
 
     const firstLine = lines[0];
     const delimiter = firstLine.includes(';') ? ';' : ',';
     const headers = parseCsvLine(lines[0].toLowerCase(), delimiter).map(h => cleanCsvString(h).replace(/^"|"$/g, ''));
     
-    const posts: Post[] = [];
+    const validPosts: Post[] = [];
+    const errors: ImportError[] = [];
 
     for (let i = 1; i < lines.length; i++) {
         const values = parseCsvLine(lines[i], delimiter);
-        if (values.length < 2) continue;
+        if (values.length < 2) continue; // Skip empty rows
 
         const postData: any = {
             status: PostStatus.Draft,
             postType: PostType.Post,
             history: []
         };
+
+        let rowHasData = false;
 
         headers.forEach((header, index) => {
             const mappedKey = CSV_MAPPING[header];
@@ -196,6 +236,8 @@ export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = 
                 if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
                 value = cleanCsvString(value);
                 
+                if (value) rowHasData = true;
+
                 if (mappedKey === 'externalLink' || mappedKey === 'creativityLink') {
                     value = value.replace(/\s/g, ''); 
                 }
@@ -209,26 +251,59 @@ export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = 
             }
         });
 
+        if (!rowHasData) continue; // Skip completely empty parsed rows
+
         // 1. REGOLE SPECIALI PER TELEGRAM
         if (postData.social === 'Telegram') {
             postData.postType = PostType.Update;
         }
 
+        // 2. VALIDAZIONE E NORMALIZZAZIONE DATA
         let finalDate = moment();
-        const dateFormats = ['DD/MM/YYYY', 'YYYY-MM-DD', 'DD-MM-YYYY', 'D/M/YYYY', 'D-M-YYYY'];
-        const dateTimeFormats = ['YYYY-MM-DDTHH:mm', 'DD/MM/YYYY HH:mm', 'YYYY-MM-DD HH:mm', 'DD-MM-YYYY HH:mm'];
+        const dateFormats = ['DD/MM/YYYY', 'YYYY-MM-DD', 'DD-MM-YYYY', 'D/M/YYYY', 'D-M-YYYY', 'D/M/YY', 'DD/MM/YY'];
+        const dateTimeFormats = ['YYYY-MM-DDTHH:mm', 'DD/MM/YYYY HH:mm', 'YYYY-MM-DD HH:mm', 'DD-MM-YYYY HH:mm', 'YYYY-MM-DD HH:mm:ss'];
 
-        if (postData.date) {
-            if (postData.timeStr) {
-                const cleanTime = postData.timeStr.replace('.', ':');
-                const combinedString = `${postData.date} ${cleanTime}`;
-                const parsed = moment(combinedString, dateTimeFormats.concat(['DD/MM/YYYY H:mm', 'YYYY-MM-DD H:mm']), true);
-                if (parsed.isValid()) finalDate = parsed;
-            } else {
-                const parsed = moment(postData.date, dateTimeFormats.concat(dateFormats), true);
-                if (parsed.isValid()) finalDate = parsed;
+        let dateString = postData.date ? normalizeDateString(postData.date) : '';
+        let timeString = postData.timeStr ? postData.timeStr.replace('.', ':') : '';
+        let parsedDate: moment.Moment | null = null;
+
+        if (dateString) {
+            if (timeString) {
+                const combinedString = `${dateString} ${timeString}`;
+                parsedDate = moment(combinedString, dateTimeFormats.concat(['DD/MM/YYYY H:mm', 'YYYY-MM-DD H:mm']), true);
+            } 
+            
+            // Se fallisce con l'orario o non c'è orario, prova solo data
+            if (!parsedDate || !parsedDate.isValid()) {
+                parsedDate = moment(dateString, dateTimeFormats.concat(dateFormats), true);
+                // Se abbiamo una data valida ma avevamo un orario che ha fallito, o non avevamo orario, impostiamo orario default se necessario
+                // (Moment defaulta a 00:00 se non specificato, che va bene)
             }
+
+            if (parsedDate.isValid()) {
+                finalDate = parsedDate;
+            } else {
+                // ERRORE CRITICO DATA: Aggiungi agli errori e salta questo post
+                errors.push({
+                    row: i + 1, // Riga Excel (1-based + header)
+                    data: postData,
+                    message: `Data non valida o formato errato: "${postData.date}"`
+                });
+                continue; // Salta l'aggiunta ai validPosts
+            }
+        } else {
+            // Se manca la data, usa oggi? No, meglio segnalare per i post importati
+            // A meno che non si voglia default a "Oggi". 
+            // La richiesta dice "nel caso si verifichino errori... presenta messaggio".
+            // Una data mancante in un CSV è spesso un errore.
+            errors.push({
+                row: i + 1,
+                data: postData,
+                message: `Data mancante`
+            });
+            continue;
         }
+
         postData.date = finalDate.format('YYYY-MM-DDTHH:mm');
         delete postData.timeStr;
 
@@ -261,9 +336,10 @@ export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = 
         if (!postData.title) postData.title = '(Senza Titolo)';
         if (!postData.social) postData.social = 'Generico'; 
 
-        posts.push(postData as Post);
+        validPosts.push(postData as Post);
     }
-    return posts;
+    
+    return { validPosts, errors };
 };
 
 // --- FOLLOWER STATS IMPORT LOGIC ---
