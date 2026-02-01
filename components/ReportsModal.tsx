@@ -110,7 +110,7 @@ const YearlyTrendChart: React.FC<{ data: number[], year: number }> = ({ data, ye
     const months = moment.monthsShort();
     
     return (
-        <div className="w-full bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mt-6 page-break-inside-avoid">
+        <div id="section-trend" className="w-full bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 mt-6 page-break-inside-avoid">
             <h3 className="font-bold text-gray-800 dark:text-white text-sm mb-6 flex items-center gap-2">
                 <span className="bg-blue-100 text-blue-700 p-1 rounded">📊</span> 
                 Andamento Mensile {year}
@@ -226,6 +226,16 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     const [netExclusions, setNetExclusions] = useState<string[]>(['WhatsApp', 'Telegram']);
     const [showNetSettings, setShowNetSettings] = useState(false);
 
+    // CONFIGURAZIONE EXPORT
+    const [showExportSettings, setShowExportSettings] = useState(false);
+    const [exportConfig, setExportConfig] = useState({
+        includeKPI: true,
+        includeCharts: true,
+        includeTeamStats: true, // Questo è il controllo principale richiesto
+        includeCuriosities: true,
+        includeTrend: true
+    });
+
     const handleYearChange = (delta: number) => setSelectedYear(prev => prev + delta);
     const handleMonthPreset = (monthIndex: number) => {
         const start = moment().year(selectedYear).month(monthIndex).startOf('month').format('YYYY-MM-DD');
@@ -243,6 +253,10 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
             if (prev.includes(channelName)) return prev.filter(c => c !== channelName);
             return [...prev, channelName];
         });
+    };
+
+    const toggleExportConfig = (key: keyof typeof exportConfig) => {
+        setExportConfig(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
     // UPDATE DATE INPUTS BASED ON PRESET SELECTION
@@ -287,11 +301,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     const filteredPosts = useMemo(() => {
         let result = posts;
         
-        // FILTRAGGIO DATA
-        // Se è 'ALL', non filtriamo.
-        // Se è 'YEAR', filtriamo per l'anno selezionato manualmente
-        // Per tutti gli altri casi (CUSTOM e PRESET), usiamo customStartDate e customEndDate che ora sono sincronizzati
-        
         if (timeRange === 'ALL') {
             // No date filter
         } else if (timeRange === 'YEAR') {
@@ -325,7 +334,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     }, [posts, timeRange, searchTerm, customStartDate, customEndDate, selectedYear, teamMembers]);
 
     // CALCOLA TUTTI I NOMI CANALI DISPONIBILI (Presenti nei post o nella config)
-    // Questo serve per popolare la lista di esclusione anche con canali eliminati o 'Generico'
     const availableChannelNames = useMemo(() => {
         const names = new Set<string>();
         // Aggiungi canali attivi
@@ -399,14 +407,11 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         });
 
         // --- CURIOSITÀ E STATISTICHE AVANZATE ---
-        
-        // 1. Weekend Warriors (Post Sabato + Domenica)
         const weekendPosts = filteredPosts.filter(p => {
             const day = moment(p.date).day();
             return (day === 0 || day === 6) && p.status === PostStatus.Published;
         }).length;
 
-        // 2. Giorno Preferito
         const daysCount = Array(7).fill(0);
         filteredPosts.filter(p => p.status === PostStatus.Published).forEach(p => {
             daysCount[moment(p.date).day()]++;
@@ -415,8 +420,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
         const maxDayIndex = daysCount.indexOf(maxDayVal);
         const favoriteDay = maxDayVal > 0 ? moment.weekdays(maxDayIndex) : "N/A";
 
-        // 3. Record Costanza (Streak di giorni consecutivi con almeno 1 post pubblicato)
-        // Estrai date uniche di pubblicazione, ordinate
         const publishedDates = [...new Set(
             filteredPosts
                 .filter(p => p.status === PostStatus.Published)
@@ -425,7 +428,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
 
         let maxStreak = 0;
         let currentStreak = 0;
-        
         for (let i = 0; i < publishedDates.length; i++) {
             if (i === 0) {
                 currentStreak = 1;
@@ -441,7 +443,6 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
             if (currentStreak > maxStreak) maxStreak = currentStreak;
         }
 
-        // 4. Fascia Oraria Top
         const hoursCount = Array(24).fill(0);
         filteredPosts.filter(p => p.status === PostStatus.Published).forEach(p => {
             hoursCount[moment(p.date).hour()]++;
@@ -459,21 +460,85 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
     }, [filteredPosts, channels, teamMembers, posts, selectedYear, netExclusions]);
 
     const handlePrint = () => {
-        const content = document.getElementById('reports-modal-content-body'); if (!content) return;
-        const iframe = document.createElement('iframe'); iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0'; iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
-        document.body.appendChild(iframe); const doc = iframe.contentWindow?.document;
+        const originalContent = document.getElementById('reports-modal-content-body'); 
+        if (!originalContent) return;
+
+        // Clona il nodo per manipolarlo senza alterare la UI
+        const contentClone = originalContent.cloneNode(true) as HTMLElement;
+
+        // Rimuovi sezioni in base alla configurazione
+        if (!exportConfig.includeKPI) {
+            const el = contentClone.querySelector('#section-kpis');
+            if (el) el.remove();
+        }
+        if (!exportConfig.includeCharts) {
+            // Rimuovi i grafici tranne (eventualmente) quello del team se gestito separatamente
+            const chartsToRemove = ['#chart-status', '#chart-channel', '#chart-type'];
+            chartsToRemove.forEach(selector => {
+                const el = contentClone.querySelector(selector);
+                if (el) el.remove();
+            });
+        }
+        // Il grafico team ha una logica specifica
+        if (!exportConfig.includeTeamStats) {
+            const el = contentClone.querySelector('#chart-team');
+            if (el) el.remove();
+        } else if (!exportConfig.includeCharts) {
+            // Se i grafici generali sono off ma il team è on, dobbiamo assicurarci che il team resti.
+            // (La logica sopra rimuove gli altri, quindi #chart-team resta se non rimosso esplicitamente)
+        }
+
+        if (!exportConfig.includeCuriosities) {
+            const el = contentClone.querySelector('#section-curiosities');
+            if (el) el.remove();
+        }
+        if (!exportConfig.includeTrend) {
+            const el = contentClone.querySelector('#section-trend');
+            if (el) el.remove();
+        }
+
+        const iframe = document.createElement('iframe'); 
+        iframe.style.position = 'fixed'; iframe.style.right = '0'; iframe.style.bottom = '0'; iframe.style.width = '0'; iframe.style.height = '0'; iframe.style.border = '0';
+        document.body.appendChild(iframe); 
+        const doc = iframe.contentWindow?.document;
         if (doc) {
-            doc.open(); doc.write(`
+            doc.open(); 
+            doc.write(`
                 <html><head><title>Report Analitico</title><script src="https://cdn.tailwindcss.com"></script><style>body { background-color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: sans-serif; padding: 20px; } .no-print { display: none !important; } h2, h3, p, span, div { color: black !important; } .page-break-inside-avoid { page-break-inside: avoid; }</style></head>
-                <body><div class="mb-6 border-b pb-4"><h1 class="text-3xl font-bold">Report Analitico</h1><p class="text-gray-600">Generato il ${moment().format('DD/MM/YYYY HH:mm')}<br/>Periodo: ${timeRange === 'CUSTOM' ? `${moment(customStartDate).format('DD/MM/YY')} - ${moment(customEndDate).format('DD/MM/YY')}` : RANGE_LABELS[timeRange]}</p></div><div id="print-body">${content.innerHTML}</div><script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script></body></html>`);
+                <body><div class="mb-6 border-b pb-4"><h1 class="text-3xl font-bold">Report Analitico</h1><p class="text-gray-600">Generato il ${moment().format('DD/MM/YYYY HH:mm')}<br/>Periodo: ${timeRange === 'CUSTOM' ? `${moment(customStartDate).format('DD/MM/YY')} - ${moment(customEndDate).format('DD/MM/YY')}` : RANGE_LABELS[timeRange]}</p></div><div id="print-body">${contentClone.innerHTML}</div><script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script></body></html>`);
             doc.close();
         }
     };
 
     const handleExportCSV = () => {
-        const rows = [
-            ['REPORT ANALITICO CALENDARIO EDITORIALE'], ['Data Generazione', moment().format('DD/MM/YYYY HH:mm')], ['KPI GENERALI'], ['Totale Post', stats.totalPosts], ['Pubblicati (Totale)', stats.published], ['Collaborazioni', stats.collaborations], ['Pubblicati (Netto)', stats.netPublished], ['Aggiornamenti (WA/TG)', stats.updatesCount], [], ['DISTRIBUZIONE PER CANALE'], ...stats.postsByChannel.map(c => [c.label, c.value])
-        ];
+        const rows = [['REPORT ANALITICO CALENDARIO EDITORIALE'], ['Data Generazione', moment().format('DD/MM/YYYY HH:mm')]];
+
+        if (exportConfig.includeKPI) {
+            rows.push(
+                ['KPI GENERALI'], 
+                ['Totale Post', stats.totalPosts], 
+                ['Pubblicati (Totale)', stats.published], 
+                ['Collaborazioni', stats.collaborations], 
+                ['Pubblicati (Netto)', stats.netPublished], 
+                ['Aggiornamenti (WA/TG)', stats.updatesCount], 
+                []
+            );
+        }
+
+        if (exportConfig.includeCharts) {
+            rows.push(['DISTRIBUZIONE PER CANALE'], ...stats.postsByChannel.map(c => [c.label, c.value]), []);
+            rows.push(['DISTRIBUZIONE PER TIPO'], ...stats.postsByType.map(t => [t.label, t.value]), []);
+            rows.push(['DISTRIBUZIONE PER STATO'], ...stats.statusData.map(s => [s.label, s.value]), []);
+        }
+
+        if (exportConfig.includeTeamStats) {
+            rows.push(['PERFORMANCE TEAM'], ...stats.teamStats.map(t => [t.label, t.value]), []);
+        }
+
+        if (exportConfig.includeCuriosities) {
+            rows.push(['CURIOSITA'], ['Giorno Preferito', stats.favoriteDay], ['Ora Preferita', stats.favoriteHour], ['Record Costanza', stats.maxStreak + ' gg'], []);
+        }
+
         const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `report_social_${moment().format('YYYY-MM-DD')}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link);
     };
@@ -487,7 +552,48 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                     <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl shadow-sm">
                         <div className="flex justify-between items-center p-4">
                             <div><h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">Report Analitico</h2></div>
-                            <div className="flex items-center gap-2 no-print">
+                            <div className="flex items-center gap-2 no-print relative">
+                                {/* EXPORT SETTINGS DROPDOWN */}
+                                <div className="relative">
+                                    <button 
+                                        onClick={() => setShowExportSettings(!showExportSettings)}
+                                        className={`p-2 rounded-lg transition-colors border ${showExportSettings ? 'bg-blue-100 border-blue-300 text-blue-700' : 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'}`}
+                                        title="Configura Esportazione"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    </button>
+                                    {showExportSettings && (
+                                        <div className="absolute top-full right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-600 z-50 p-4 animate-fadeIn">
+                                            <div className="flex justify-between items-center mb-3 border-b border-gray-100 dark:border-gray-700 pb-2">
+                                                <span className="text-xs font-bold uppercase text-gray-500">Opzioni Esportazione</span>
+                                                <button onClick={() => setShowExportSettings(false)} className="text-gray-400 hover:text-gray-600">×</button>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                                                    <input type="checkbox" checked={exportConfig.includeKPI} onChange={() => toggleExportConfig('includeKPI')} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                                    KPI Generali
+                                                </label>
+                                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                                                    <input type="checkbox" checked={exportConfig.includeCharts} onChange={() => toggleExportConfig('includeCharts')} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                                    Grafici (Canali/Stato)
+                                                </label>
+                                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer bg-blue-50 dark:bg-blue-900/20 p-1.5 rounded -mx-1.5">
+                                                    <input type="checkbox" checked={exportConfig.includeTeamStats} onChange={() => toggleExportConfig('includeTeamStats')} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                                    <span className="font-semibold text-blue-700 dark:text-blue-300">Statistiche Team</span>
+                                                </label>
+                                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                                                    <input type="checkbox" checked={exportConfig.includeCuriosities} onChange={() => toggleExportConfig('includeCuriosities')} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                                    Curiosità & Record
+                                                </label>
+                                                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                                                    <input type="checkbox" checked={exportConfig.includeTrend} onChange={() => toggleExportConfig('includeTrend')} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                                    Trend Annuale
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
                                 <button onClick={handleExportCSV} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-sm font-medium border border-emerald-200">CSV</button>
                                 <button onClick={handlePrint} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-medium border border-indigo-200">Stampa</button>
                                 <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -580,7 +686,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                         {/* RISULTATI FILTRATI */}
                         <div id="reports-modal-content-body" className="space-y-6">
                             {/* PRIMA RIGA: KPI PRINCIPALI */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div id="section-kpis" className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <KPICard title="Totale Post" value={stats.totalPosts} icon={<span className="text-2xl">📝</span>} />
                                 <KPICard title="Pubblicati (Totale)" value={stats.published} colorClass="text-green-600 dark:text-green-400" icon={<span className="text-2xl">✅</span>} />
                                 
@@ -642,26 +748,26 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             
                             {/* GRAFICI A CIAMBELLA/BARRE */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
+                                <div id="chart-status" className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
                                     <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Stato</h3><ChartToggle current={chartPrefs.status} onChange={(t) => setChartPrefs(prev => ({...prev, status: t}))} /></div>
                                     <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.status === 'donut' ? <DonutChart data={stats.statusData} /> : <ProgressBarChart data={stats.statusData} />}</div>
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
+                                <div id="chart-channel" className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
                                     <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Canali</h3><ChartToggle current={chartPrefs.channel} onChange={(t) => setChartPrefs(prev => ({...prev, channel: t}))} /></div>
                                     <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.channel === 'donut' ? <DonutChart data={stats.postsByChannel} /> : <ProgressBarChart data={stats.postsByChannel} />}</div>
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
+                                <div id="chart-type" className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
                                     <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Tipologia</h3><ChartToggle current={chartPrefs.type} onChange={(t) => setChartPrefs(prev => ({...prev, type: t}))} /></div>
                                     <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.type === 'donut' ? <DonutChart data={stats.postsByType} /> : <ProgressBarChart data={stats.postsByType} />}</div>
                                 </div>
-                                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
+                                <div id="chart-team" className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col page-break-inside-avoid">
                                     <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-gray-800 dark:text-white text-sm">Team</h3><ChartToggle current={chartPrefs.team} onChange={(t) => setChartPrefs(prev => ({...prev, team: t}))} /></div>
                                     <div className="flex-grow flex items-center justify-center min-h-[200px]">{chartPrefs.team === 'donut' ? <DonutChart data={stats.teamStats} /> : <ProgressBarChart data={stats.teamStats} />}</div>
                                 </div>
                             </div>
 
                             {/* CURIOSITÀ E RECORD */}
-                            <div className="mt-8 page-break-inside-avoid">
+                            <div id="section-curiosities" className="mt-8 page-break-inside-avoid">
                                 <h3 className="font-bold text-gray-800 dark:text-white text-sm mb-4 flex items-center gap-2">
                                     <span className="bg-amber-100 text-amber-700 p-1 rounded">🏆</span> 
                                     Curiosità & Record
@@ -695,7 +801,7 @@ const ReportsModal: React.FC<ReportsModalProps> = ({ isOpen, onClose, posts, cha
                             </div>
 
                             {/* GRAFICO: TREND MENSILE DELL'ANNO */}
-                            <YearlyTrendChart data={stats.yearlyTrendData} year={selectedYear} />
+                            {exportConfig.includeTrend && <YearlyTrendChart data={stats.yearlyTrendData} year={selectedYear} />}
                         </div>
                     </div>
                 </div>

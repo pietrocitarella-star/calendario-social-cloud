@@ -9,6 +9,15 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.9.0',
+        date: '21/11/2025',
+        changes: [
+            'Configurazione Export Report: Ora puoi scegliere quali informazioni includere nei tuoi report PDF e CSV. È stata aggiunta un\'icona ingranaggio nella modale report.',
+            'Privacy Team: Possibilità di escludere le statistiche di performance dei membri del team dai report esportati.',
+            'Personalizzazione Totale: Seleziona o deseleziona KPI, Grafici, Curiosità e Trend per creare documenti su misura per clienti o uso interno.'
+        ]
+    },
+    {
         version: '2.8.2',
         date: '21/11/2025',
         changes: [
