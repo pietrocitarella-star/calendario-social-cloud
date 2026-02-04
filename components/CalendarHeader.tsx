@@ -9,6 +9,7 @@ interface CalendarHeaderProps {
   onShowReports: () => void;
   onShowChannels: () => void;
   onShowTeam: () => void;
+  onShowCampaigns: () => void; // NUOVO
   onExportJson: () => void;
   onExportCsv: () => void;
   onImport: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -38,6 +39,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
     onShowReports, 
     onShowChannels, 
     onShowTeam, 
+    onShowCampaigns,
     onExportJson, 
     onExportCsv, 
     onImport,
@@ -144,7 +146,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                         className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 text-xs font-mono rounded-full transition-colors"
                         title="Vedi cronologia versioni"
                     >
-                        v2.9.0
+                        v2.9.2
                     </button>
                 )}
             </div>
@@ -247,107 +249,9 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                         Team
                     </button>
-                </div>
-                
-                {/* Notification Bell */}
-                <div className="relative" ref={notificationRef}>
-                    <button 
-                        onClick={() => setShowNotifications(!showNotifications)}
-                        className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg relative transition-colors"
-                        title="Notifiche"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                        </svg>
-                        {notifications.length > 0 && (
-                            <span className="absolute top-1 right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></span>
-                        )}
-                    </button>
-
-                    {showNotifications && (
-                        <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
-                            <div className="p-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                                <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-200">Notifiche ({notifications.length})</h3>
-                            </div>
-                            <div className="max-h-80 overflow-y-auto">
-                                {notifications.length === 0 ? (
-                                    <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                        Nessuna nuova notifica.
-                                    </div>
-                                ) : (
-                                    <ul>
-                                        {notifications.map(note => (
-                                            <li key={note.id}>
-                                                <button
-                                                    onClick={() => {
-                                                        if (onNotificationClick) onNotificationClick(note.postId);
-                                                        setShowNotifications(false);
-                                                    }}
-                                                    className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-700 last:border-0"
-                                                >
-                                                    <div className="flex items-start gap-3">
-                                                        <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${note.type === 'deadline' ? 'bg-orange-500' : 'bg-blue-500'}`}></span>
-                                                        <div>
-                                                            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{note.type === 'deadline' ? 'In Scadenza' : 'Approvazione Richiesta'}</p>
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{note.message}</p>
-                                                            <p className="text-[10px] text-gray-400 mt-1">{moment(note.date).calendar()}</p>
-                                                        </div>
-                                                    </div>
-                                                </button>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                <div className="h-8 border-l border-gray-300 dark:border-gray-600 mx-1 hidden lg:block"></div>
-
-                <div className="flex gap-2">
-                    <input type="file" accept=".json" ref={fileInputRef} onChange={onImport} className="hidden" />
-                    {/* Input CSV separato ma gestito dallo stesso handler con logica diversa, o handler separato */}
-                    <input type="file" accept=".csv" ref={csvInputRef} onChange={onImport} className="hidden" />
-
-                    {/* Pulsante Importa JSON */}
-                    <button 
-                        onClick={() => fileInputRef?.current?.click()} 
-                        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors shadow-sm"
-                        title="Ripristina Backup JSON (Sovrascrive)"
-                    >
-                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-                        Backup
-                    </button>
-
-                    {/* Pulsante Importa CSV */}
-                    <button 
-                        onClick={handleCsvClick} 
-                        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-                        title="Importa Post da CSV (Aggiunge)"
-                    >
-                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                        Importa CSV
-                    </button>
-
-                    {/* Pulsante JSON */}
-                    <button 
-                        onClick={onExportJson} 
-                        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors shadow-sm"
-                        title="Scarica Backup JSON"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        JSON
-                    </button>
-
-                    {/* Pulsante CSV */}
-                    <button 
-                        onClick={onExportCsv} 
-                        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
-                        title="Esporta in CSV/Excel"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                        CSV
+                    <button onClick={onShowCampaigns} className="flex items-center gap-1 px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition-colors shadow-sm whitespace-nowrap">
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
+                        Campagne
                     </button>
                 </div>
 

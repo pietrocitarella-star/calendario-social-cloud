@@ -12,9 +12,23 @@ interface PostModalProps {
   onClose: () => void;
   onSave: (post: Post) => void;
   onDelete: (id: string) => void;
+  
+  // Campagne context
+  forcedCampaignId?: string;
+  defaultHidden?: boolean;
 }
 
-const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, teamMembers = [], onClose, onSave, onDelete }) => {
+const PostModal: React.FC<PostModalProps> = ({ 
+    isOpen, 
+    post, 
+    socialChannels, 
+    teamMembers = [], 
+    onClose, 
+    onSave, 
+    onDelete,
+    forcedCampaignId,
+    defaultHidden = false
+}) => {
   const [formData, setFormData] = useState<Partial<Post>>(post);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -32,14 +46,24 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
   const [urlErrors, setUrlErrors] = useState({ external: '', creativity: '' });
 
   useEffect(() => {
-    setFormData(post);
+    // Merge post data with campaign defaults if creating new
+    const initialData = { ...post };
+    if (!post.id && forcedCampaignId) {
+        initialData.campaignId = forcedCampaignId;
+        // Solo se è nuovo applichiamo il defaultHidden, altrimenti rispettiamo quello che c'è
+        if (initialData.hiddenFromCalendar === undefined) {
+            initialData.hiddenFromCalendar = defaultHidden;
+        }
+    }
+    
+    setFormData(initialData);
     setShowDeleteConfirm(false);
     setShowHistory(false);
     // Se il post ha un ID (esiste già), mostra l'anteprima di default.
     // Se è un nuovo post, mostra la modalità di scrittura.
     setNoteMode(post.id ? 'preview' : 'edit');
     setUrlErrors({ external: '', creativity: '' });
-  }, [post]);
+  }, [post, forcedCampaignId, defaultHidden]);
 
   const validateUrl = (url?: string) => {
       if (!url) return '';
@@ -73,6 +97,10 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
     if (name === 'creativityLink') {
         setUrlErrors(prev => ({ ...prev, creativity: validateUrl(value) }));
     }
+  };
+
+  const handleToggleHidden = () => {
+      setFormData(prev => ({ ...prev, hiddenFromCalendar: !prev.hiddenFromCalendar }));
   };
 
   const handleCopyTitle = async () => {
@@ -214,7 +242,7 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center z-[100] p-4">
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
         <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -229,6 +257,24 @@ const PostModal: React.FC<PostModalProps> = ({ isOpen, post, socialChannels, tea
                 </button>
             )}
         </div>
+
+        {/* Campagna Info Banner (Se in modalità campagna) */}
+        {forcedCampaignId && (
+            <div className={`mb-4 border p-3 rounded-lg flex items-center gap-3 text-sm transition-colors ${formData.hiddenFromCalendar ? 'bg-gray-100 border-gray-300 text-gray-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300' : 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200'}`}>
+                <span className="text-xl">{formData.hiddenFromCalendar ? '👻' : '📅'}</span>
+                <div className="flex-grow">
+                    <p className="font-bold">{formData.hiddenFromCalendar ? 'Nascosto dal Calendario' : 'Visibile nel Calendario'}</p>
+                    <p className="text-xs opacity-80">Questo post fa parte di una campagna.</p>
+                </div>
+                <label className="flex items-center cursor-pointer">
+                    <div className="relative">
+                        <input type="checkbox" className="sr-only" checked={!formData.hiddenFromCalendar} onChange={handleToggleHidden} />
+                        <div className={`block w-10 h-6 rounded-full transition-colors ${!formData.hiddenFromCalendar ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                        <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${!formData.hiddenFromCalendar ? 'transform translate-x-4' : ''}`}></div>
+                    </div>
+                </label>
+            </div>
+        )}
 
         {showHistory && formData.history && (
             <div className="mb-4 p-3 bg-blue-50 dark:bg-gray-700 rounded-lg border border-blue-100 dark:border-gray-600 max-h-40 overflow-y-auto">

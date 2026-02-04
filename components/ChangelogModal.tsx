@@ -9,6 +9,24 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.9.2',
+        date: '21/11/2025',
+        changes: [
+            'Gestione Campagne Potenziata: Risolto il bug di aggiornamento in tempo reale. Ora i nuovi post appaiono immediatamente nella lista della campagna senza dover ricaricare.',
+            'Duplicazione Campagne: Aggiunto pulsante per duplicare una campagna esistente (copia la struttura e le impostazioni).',
+            'Conteggio Post: Nelle card riepilogative delle campagne è ora visibile il numero totale di post contenuti.',
+            'Controllo Visibilità Granulare: È possibile scegliere se mostrare o nascondere nel calendario editoriale principale ogni singolo post di una campagna direttamente dalla maschera di modifica.',
+            'Sincronizzazione Massiva: Il pulsante "Mostra nel calendario" ora funziona correttamente con una richiesta di conferma esplicita per evitare azioni accidentali.',
+        ]
+    },
+    {
+        version: '2.9.1',
+        date: '21/11/2025',
+        changes: [
+            'Performance Fix Campagne: Risolto un problema di rallentamento durante l\'aggiunta di post nelle campagne. Ora il caricamento è ottimizzato e immediato anche con molti post nel calendario.',
+        ]
+    },
+    {
         version: '2.9.0',
         date: '21/11/2025',
         changes: [

@@ -37,6 +37,7 @@ const TeamMembersModal = lazy(() => import('./components/TeamMembersModal'));
 const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
 const DayDetailsModal = lazy(() => import('./components/DayDetailsModal'));
 const FollowersModal = lazy(() => import('./components/FollowersModal')); 
+const CampaignsManager = lazy(() => import('./components/CampaignsManager')); // NUOVO
 
 moment.locale('it');
 moment.updateLocale('it', {
@@ -99,6 +100,9 @@ const App: React.FC = () => {
     const [globalSearchIndex, setGlobalSearchIndex] = useState<Post[]>([]);
     const [isSearchMode, setIsSearchMode] = useState(false); // NUOVO STATO RICERCA
     
+    // Trigger per aggiornare componenti figli (es. Campagne) quando i post cambiano
+    const [postsUpdateTrigger, setPostsUpdateTrigger] = useState(0);
+
     const [reportPosts, setReportPosts] = useState<Post[]>([]); 
     const [isLoadingReportData, setIsLoadingReportData] = useState(false);
 
@@ -113,6 +117,8 @@ const App: React.FC = () => {
     const [date, setDate] = useState(new Date());
 
     const [selectedEvent, setSelectedEvent] = useState<Partial<Post> | null>(null);
+    // State per il context campagne (se stiamo creando un post dentro una campagna)
+    const [campaignContext, setCampaignContext] = useState<{ id: string, hidden: boolean } | undefined>(undefined);
     
     const [isPostModalOpen, setIsPostModalOpen] = useState(false);
     const [isReportsModalOpen, setIsReportsModalOpen] = useState(false);
@@ -120,6 +126,7 @@ const App: React.FC = () => {
     const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
     const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
     const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false); 
+    const [isCampaignsModalOpen, setIsCampaignsModalOpen] = useState(false); // NUOVO
     
     const [dayModalData, setDayModalData] = useState<{ isOpen: boolean, date: Date | null, posts: Post[] }>({
         isOpen: false,
@@ -264,7 +271,12 @@ const App: React.FC = () => {
         return () => unsubscribe();
     }, [user, isAuthorized]);
 
-    const events = useMemo(() => mapPostsToEvents(posts), [posts]);
+    // MAPPA EVENTI PER IL CALENDARIO
+    // Importante: Filtriamo qui i post "hiddenFromCalendar" (campagne sandbox)
+    const events = useMemo(() => {
+        const visiblePosts = posts.filter(p => !p.hiddenFromCalendar);
+        return mapPostsToEvents(visiblePosts);
+    }, [posts]);
 
     // CALCOLO CANALI "FANTASMA" (Presenti nei post ma non nella lista ufficiale)
     const ghostChannels = useMemo(() => {
@@ -277,7 +289,7 @@ const App: React.FC = () => {
     const searchResults = useMemo(() => {
         if (!searchTerm || searchTerm.length < 2) return [];
         const lowerTerm = searchTerm.toLowerCase();
-        // Filtriamo su TUTTO lo storico (globalSearchIndex), non solo sui post del calendario
+        // Filtriamo su TUTTO lo storico (globalSearchIndex), includendo anche i post nascosti (utile per trovarli)
         return globalSearchIndex
             .filter(p => p.title.toLowerCase().includes(lowerTerm) || (p.notes && p.notes.toLowerCase().includes(lowerTerm)))
             .sort((a, b) => moment(b.date).valueOf() - moment(a.date).valueOf()); // Dal più recente
@@ -287,7 +299,10 @@ const App: React.FC = () => {
         setIsLoadingReportData(true);
         // Carica tutto lo storico per i report
         const data = await fetchAllPosts();
-        setReportPosts(data);
+        // Filtra i post nascosti dai report per coerenza, o lasciali? 
+        // Meglio filtrare quelli hiddenFromCalendar per non falsare le stats
+        const visibleData = data.filter(p => !p.hiddenFromCalendar);
+        setReportPosts(visibleData);
         setIsLoadingReportData(false);
         setIsReportsModalOpen(true);
     };
@@ -332,7 +347,8 @@ const App: React.FC = () => {
         const now = moment();
         const tomorrow = moment().add(24, 'hours');
 
-        posts.forEach(post => {
+        // Notifiche solo su post visibili
+        posts.filter(p => !p.hiddenFromCalendar).forEach(post => {
             if (post.status === PostStatus.Scheduled && post.id) {
                 const postDate = moment(post.date);
                 if (postDate.isAfter(now) && postDate.isBefore(tomorrow)) {
@@ -395,7 +411,7 @@ const App: React.FC = () => {
         const counts: Record<string, number> = {};
         
         // Se siamo in search mode, contiamo i risultati della ricerca. Altrimenti i post della view.
-        let baseList = isSearchMode ? searchResults : posts;
+        let baseList = isSearchMode ? searchResults : posts.filter(p => !p.hiddenFromCalendar);
 
         if (!isSearchMode) {
             // Apply visual filters for Calendar
@@ -481,6 +497,8 @@ const App: React.FC = () => {
             postType: PostType.Post,
             title: '',
         });
+        // Reset context when adding from main calendar
+        setCampaignContext(undefined);
         setIsPostModalOpen(true);
     }, [socialChannels, isSelectionMode]);
 
@@ -495,6 +513,7 @@ const App: React.FC = () => {
     }, [posts, isSelectionMode]);
 
     const isPostVisible = useCallback((post: Post) => {
+        if (post.hiddenFromCalendar) return false;
         if (activeChannelFilters.length > 0 && !activeChannelFilters.includes(post.social)) return false;
         if (activeStatusFilters.length > 0 && !activeStatusFilters.includes(post.status)) return false;
         if (searchTerm.trim()) {
@@ -523,9 +542,12 @@ const App: React.FC = () => {
     const closePostModal = useCallback(() => {
         setIsPostModalOpen(false);
         setSelectedEvent(null);
+        setCampaignContext(undefined);
     }, []);
 
     const handleSavePost = useCallback(async (postToSave: Post) => {
+        let savedPost: Post | undefined;
+        
         if (postToSave.id) {
             const originalPost = posts.find(p => p.id === postToSave.id);
             if (originalPost) {
@@ -533,15 +555,19 @@ const App: React.FC = () => {
             } else {
                 await updatePost(postToSave.id, postToSave);
             }
+            savedPost = postToSave;
         } else {
-            await addPost(postToSave);
+            savedPost = await addPost(postToSave);
         }
-        // Aggiorna anche l'indice di ricerca locale per feedback immediato (opzionale, ma utile)
+        
+        // Aggiorna indice di ricerca locale e trigger
         const updatedIndex = [...globalSearchIndex];
-        const idx = updatedIndex.findIndex(p => p.id === postToSave.id);
-        if (idx >= 0) updatedIndex[idx] = postToSave;
-        else updatedIndex.push(postToSave);
+        const idx = updatedIndex.findIndex(p => p.id === savedPost?.id);
+        if (idx >= 0 && savedPost) updatedIndex[idx] = savedPost;
+        else if (savedPost) updatedIndex.push(savedPost);
+        
         setGlobalSearchIndex(updatedIndex);
+        setPostsUpdateTrigger(prev => prev + 1); // Trigger per componenti esterni come CampaignsManager
 
         closePostModal();
     }, [closePostModal, posts, globalSearchIndex]);
@@ -550,8 +576,9 @@ const App: React.FC = () => {
         if (!id) return;
         await deletePost(id);
         
-        // Rimuovi dall'indice di ricerca
+        // Rimuovi dall'indice di ricerca e trigger
         setGlobalSearchIndex(prev => prev.filter(p => p.id !== id));
+        setPostsUpdateTrigger(prev => prev + 1);
         
         closePostModal();
     }, [closePostModal]);
@@ -565,8 +592,9 @@ const App: React.FC = () => {
         if (selectedPostIds.length === 0) return;
         try {
             await deletePostsBulk(selectedPostIds);
-            // Aggiorna indice ricerca
+            // Aggiorna indice ricerca e trigger
             setGlobalSearchIndex(prev => prev.filter(p => !selectedPostIds.includes(p.id || '')));
+            setPostsUpdateTrigger(prev => prev + 1);
             
             setSelectedPostIds([]);
             setIsSelectionMode(false);
@@ -704,8 +732,9 @@ const App: React.FC = () => {
     const confirmImport = async () => {
         if (importPreview && importPreview.data) {
             await savePostsToStorage(importPreview.data);
-            // Aggiorna anche l'indice di ricerca globale
+            // Aggiorna indice ricerca e trigger
             setGlobalSearchIndex(prev => [...prev, ...(importPreview.data || [])]);
+            setPostsUpdateTrigger(prev => prev + 1);
             
             const importedCount = importPreview.valid;
             setImportPreview(null);
@@ -937,6 +966,7 @@ const App: React.FC = () => {
                         onShowReports={handleShowReports}
                         onShowChannels={() => setIsChannelsModalOpen(true)}
                         onShowTeam={() => setIsTeamModalOpen(true)}
+                        onShowCampaigns={() => setIsCampaignsModalOpen(true)}
                         onExportJson={handleExportJson}
                         onExportCsv={handleExportCsv}
                         onImport={handleImportFileSelect}
@@ -957,7 +987,7 @@ const App: React.FC = () => {
                         // NUOVE PROPS PER RICERCA GLOBALE
                         allPosts={globalSearchIndex}
                         onSearchResultSelect={handleSearchResultSelect}
-                        onSearchSubmit={handleSearchSubmit} // PASSATA FUNZIONE SUBMIT
+                        onSearchSubmit={handleSearchSubmit} 
                     />
                     
                     {/* AGENDA BULK ACTIONS TOOLBAR (Visibile solo in view Agenda) */}
@@ -966,7 +996,7 @@ const App: React.FC = () => {
                             <div className="flex items-center gap-3">
                                 <h3 className="text-sm font-bold text-blue-800 dark:text-blue-200 flex items-center gap-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                                        <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
                                     </svg>
                                     Gestione Agenda
                                 </h3>
@@ -1100,7 +1130,17 @@ const App: React.FC = () => {
             
             <Suspense fallback={null}>
                 {isPostModalOpen && selectedEvent && (
-                    <PostModal isOpen={isPostModalOpen} post={selectedEvent} socialChannels={socialChannels} teamMembers={teamMembers} onClose={closePostModal} onSave={handleSavePost} onDelete={handleDeletePost} />
+                    <PostModal 
+                        isOpen={isPostModalOpen} 
+                        post={selectedEvent} 
+                        socialChannels={socialChannels} 
+                        teamMembers={teamMembers} 
+                        onClose={closePostModal} 
+                        onSave={handleSavePost} 
+                        onDelete={handleDeletePost} 
+                        forcedCampaignId={campaignContext?.id}
+                        defaultHidden={campaignContext?.hidden}
+                    />
                 )}
                 {isReportsModalOpen && (
                     <ReportsModal isOpen={isReportsModalOpen} onClose={() => setIsReportsModalOpen(false)} posts={reportPosts} channels={socialChannels} teamMembers={teamMembers} />
@@ -1114,96 +1154,29 @@ const App: React.FC = () => {
                 {isChangelogModalOpen && (
                     <ChangelogModal isOpen={isChangelogModalOpen} onClose={() => setIsChangelogModalOpen(false)} />
                 )}
-                {/* MODALE FOLLOWERS */}
                 {isFollowersModalOpen && (
                     <FollowersModal isOpen={isFollowersModalOpen} onClose={() => setIsFollowersModalOpen(false)} channels={socialChannels} />
+                )}
+                {/* MODALE CAMPAGNE */}
+                {isCampaignsModalOpen && (
+                    <CampaignsManager 
+                        isOpen={isCampaignsModalOpen} 
+                        onClose={() => setIsCampaignsModalOpen(false)} 
+                        channels={socialChannels}
+                        teamMembers={teamMembers}
+                        allPosts={globalSearchIndex}
+                        postsUpdateTrigger={postsUpdateTrigger}
+                        onEditPost={(post, campaignId) => {
+                            setSelectedEvent(post);
+                            setCampaignContext({ id: campaignId, hidden: post.hiddenFromCalendar ?? true });
+                            setIsPostModalOpen(true);
+                        }}
+                    />
                 )}
                 {dayModalData.isOpen && (
                     <DayDetailsModal isOpen={dayModalData.isOpen} onClose={() => setDayModalData(prev => ({ ...prev, isOpen: false }))} date={dayModalData.date} posts={dayModalData.posts} teamMembers={teamMembers} channels={socialChannels} onEditPost={(post) => { setSelectedEvent(post); setIsPostModalOpen(true); }} />
                 )}
             </Suspense>
-            {importPreview && (
-                <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-xl text-center flex flex-col max-h-[90vh]">
-                        <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">Anteprima Importazione</h3>
-                        
-                        <div className="flex justify-around items-center my-4 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg">
-                            <div className="text-center">
-                                <span className="block text-2xl font-bold text-green-600 dark:text-green-400">{importPreview.valid}</span>
-                                <span className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">Validi</span>
-                            </div>
-                            {importPreview.errors && importPreview.errors.length > 0 && (
-                                <div className="text-center">
-                                    <span className="block text-2xl font-bold text-red-600 dark:text-red-400">{importPreview.errors.length}</span>
-                                    <span className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">Errori</span>
-                                </div>
-                            )}
-                        </div>
-
-                        {importPreview.errors && importPreview.errors.length > 0 && (
-                            <div className="mb-4 text-left overflow-hidden flex flex-col">
-                                <h4 className="text-sm font-bold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                    Errori rilevati ({importPreview.errors.length})
-                                </h4>
-                                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 overflow-y-auto max-h-40 text-xs">
-                                    {importPreview.errors.map((err, idx) => (
-                                        <div key={idx} className="mb-2 last:mb-0 pb-2 border-b border-red-100 dark:border-red-800 last:border-0">
-                                            <span className="font-bold text-red-700 dark:text-red-300">Riga {err.row}: </span>
-                                            <span className="text-red-600 dark:text-red-200">{err.message}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <p className="text-[10px] text-gray-500 mt-2 italic">I record con errori verranno ignorati. Puoi correggere il file e riprovare, oppure procedere importando solo quelli validi.</p>
-                            </div>
-                        )}
-
-                        <div className="flex gap-3 mt-4">
-                            <button onClick={cancelImport} className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded-lg text-gray-800 dark:text-white transition-colors hover:bg-gray-300 dark:hover:bg-gray-500">
-                                Annulla
-                            </button>
-                            <button 
-                                onClick={confirmImport} 
-                                disabled={importPreview.valid === 0}
-                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold transition-colors shadow-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Importa Validi ({importPreview.valid})
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            
-            {/* BULK DELETE CONFIRMATION MODAL */}
-            {isBulkDeleteModalOpen && (
-                <div className="fixed inset-0 bg-gray-900 bg-opacity-80 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-sm text-center transform scale-100 transition-transform">
-                        <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                        </div>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Elimina {selectedPostIds.length} Post</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                            Sei sicuro di voler eliminare definitivamente i post selezionati? Questa azione non può essere annullata.
-                        </p>
-                        <div className="flex gap-3">
-                            <button 
-                                onClick={() => setIsBulkDeleteModalOpen(false)} 
-                                className="flex-1 px-4 py-2.5 bg-gray-200 dark:bg-gray-600 rounded-lg text-gray-800 dark:text-white transition-colors font-medium hover:bg-gray-300 dark:hover:bg-gray-500"
-                            >
-                                Annulla
-                            </button>
-                            <button 
-                                onClick={performBulkDelete} 
-                                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-semibold transition-colors shadow-md hover:bg-red-700"
-                            >
-                                Sì, Elimina
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

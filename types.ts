@@ -38,6 +38,16 @@ export interface PostVersion {
   data: Omit<Post, 'history'>;
 }
 
+export interface Campaign {
+    id: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    objective?: string;
+    color: string;
+    createdAt: string;
+}
+
 export interface Post {
   id?: string;
   title: string;
@@ -50,6 +60,10 @@ export interface Post {
   creativityLink?: string;
   notes?: string;
   history?: PostVersion[]; // Array of previous versions
+  
+  // Campagne
+  campaignId?: string;
+  hiddenFromCalendar?: boolean; // Se true, non appare nel calendario principale (post "sandbox")
 }
 
 export interface CalendarEvent extends Post {

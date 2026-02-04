@@ -1,5 +1,5 @@
 
-import { Post, SocialChannel, PostVersion, TeamMember, PostStatus, PostType, FollowerStat } from '../types';
+import { Post, SocialChannel, PostVersion, TeamMember, PostStatus, PostType, FollowerStat, Campaign } from '../types';
 import { db } from '../firebaseConfig';
 import { 
     collection, 
@@ -20,6 +20,7 @@ const POSTS_COLLECTION = 'posts';
 const CHANNELS_COLLECTION = 'channels';
 const TEAM_COLLECTION = 'team_members';
 const STATS_COLLECTION = 'follower_stats';
+const CAMPAIGNS_COLLECTION = 'campaigns';
 
 // --- HELPERS ---
 
@@ -104,6 +105,22 @@ export const fetchAllPosts = async (startDate?: string): Promise<Post[]> => {
         return posts;
     } catch (e) {
         handleError('caricamento completo post', e);
+        return [];
+    }
+};
+
+// NUOVA FUNZIONE OTTIMIZZATA PER LE CAMPAGNE
+export const fetchPostsByCampaign = async (campaignId: string): Promise<Post[]> => {
+    try {
+        const q = query(collection(db, POSTS_COLLECTION), where('campaignId', '==', campaignId));
+        const snapshot = await getDocs(q);
+        const posts: Post[] = [];
+        snapshot.forEach((doc) => {
+            posts.push({ id: doc.id, ...(doc.data() as any) } as Post);
+        });
+        return posts;
+    } catch (e) {
+        handleError('caricamento post campagna', e);
         return [];
     }
 };
@@ -380,6 +397,66 @@ export const deleteFollowerStat = async (id: string): Promise<void> => {
         await deleteDoc(doc(db, STATS_COLLECTION, id));
     } catch (e) {
         handleError('eliminazione statistica', e);
+        throw e;
+    }
+};
+
+// --- CAMPAIGNS MANAGEMENT ---
+
+export const subscribeToCampaigns = (callback: (campaigns: Campaign[]) => void) => {
+    const q = query(collection(db, CAMPAIGNS_COLLECTION), orderBy('startDate', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const campaigns: Campaign[] = [];
+        snapshot.forEach((doc) => {
+            campaigns.push({ id: doc.id, ...(doc.data() as any) } as Campaign);
+        });
+        callback(campaigns);
+    }, (error) => {
+        console.error("Errore sottoscrizione campagne:", error);
+    });
+
+    return unsubscribe;
+};
+
+export const addCampaign = async (campaign: Omit<Campaign, 'id'>): Promise<void> => {
+    try {
+        await addDoc(collection(db, CAMPAIGNS_COLLECTION), {
+            ...campaign,
+            createdAt: new Date().toISOString()
+        });
+    } catch (e) {
+        handleError('creazione campagna', e);
+        throw e;
+    }
+};
+
+export const deleteCampaign = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(db, CAMPAIGNS_COLLECTION, id));
+    } catch (e) {
+        handleError('eliminazione campagna', e);
+        throw e;
+    }
+};
+
+// Aggiornamento massivo dello stato "hiddenFromCalendar" per i post di una campagna
+export const syncCampaignPosts = async (campaignId: string, hidden: boolean) => {
+    try {
+        const q = query(collection(db, POSTS_COLLECTION), where('campaignId', '==', campaignId));
+        const snapshot = await getDocs(q);
+        
+        if (snapshot.empty) return;
+
+        const batch = writeBatch(db);
+        snapshot.forEach((document) => {
+            const postRef = doc(db, POSTS_COLLECTION, document.id);
+            batch.update(postRef, { hiddenFromCalendar: hidden });
+        });
+
+        await batch.commit();
+    } catch (e) {
+        handleError('sincronizzazione post campagna', e);
         throw e;
     }
 };
