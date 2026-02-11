@@ -1157,6 +1157,130 @@ const App: React.FC = () => {
                 {isFollowersModalOpen && (
                     <FollowersModal isOpen={isFollowersModalOpen} onClose={() => setIsFollowersModalOpen(false)} channels={socialChannels} />
                 )}
+                
+                {/* PREVIEW MODAL PER IMPORTAZIONE CSV/JSON */}
+                {importPreview && (
+                    <div className="fixed inset-0 bg-gray-900 bg-opacity-90 overflow-y-auto h-full w-full flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
+                        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden">
+                            <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750 flex justify-between items-center flex-shrink-0">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                        Riepilogo Importazione {importPreview.type.toUpperCase()}
+                                    </h2>
+                                    <div className="flex gap-4 mt-2 text-sm">
+                                        <span className="text-gray-600 dark:text-gray-400">Totale: <b>{importPreview.total}</b></span>
+                                        <span className="text-green-600 dark:text-green-400">Validi: <b>{importPreview.valid}</b></span>
+                                        <span className="text-red-600 dark:text-red-400">Errori: <b>{importPreview.invalid}</b></span>
+                                    </div>
+                                </div>
+                                <button onClick={cancelImport} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2">
+                                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            </div>
+
+                            <div className="flex-grow overflow-y-auto p-6 space-y-6 bg-gray-100 dark:bg-gray-900/50">
+                                
+                                {/* LISTA ERRORI */}
+                                {importPreview.errors.length > 0 && (
+                                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl overflow-hidden">
+                                        <div className="bg-red-100 dark:bg-red-900/40 px-4 py-2 border-b border-red-200 dark:border-red-800">
+                                            <h3 className="font-bold text-red-800 dark:text-red-200 flex items-center gap-2">
+                                                ⚠️ Errori Rilevati ({importPreview.errors.length})
+                                            </h3>
+                                        </div>
+                                        <div className="max-h-48 overflow-y-auto p-0">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-300 font-bold">
+                                                    <tr>
+                                                        <th className="px-4 py-2 w-20">Riga</th>
+                                                        <th className="px-4 py-2">Motivo Errore</th>
+                                                        <th className="px-4 py-2">Dati</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-red-100 dark:divide-red-800/50">
+                                                    {importPreview.errors.map((err, idx) => (
+                                                        <tr key={idx} className="hover:bg-red-100/50 dark:hover:bg-red-900/30">
+                                                            <td className="px-4 py-2 font-mono text-red-700 dark:text-red-300">{err.row}</td>
+                                                            <td className="px-4 py-2 text-red-700 dark:text-red-300 font-medium">{err.message}</td>
+                                                            <td className="px-4 py-2 text-gray-500 dark:text-gray-400 text-xs font-mono truncate max-w-xs" title={JSON.stringify(err.data)}>
+                                                                {JSON.stringify(err.data)}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* LISTA ANTEPRIMA VALIDI */}
+                                {importPreview.data.length > 0 && (
+                                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+                                        <div className="bg-gray-50 dark:bg-gray-750 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                            <h3 className="font-bold text-gray-700 dark:text-gray-200">Anteprima Post Validi ({importPreview.data.length})</h3>
+                                            <span className="text-xs text-gray-500">Pronti per l'importazione</span>
+                                        </div>
+                                        <div className="max-h-64 overflow-y-auto">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 sticky top-0">
+                                                    <tr>
+                                                        <th className="px-4 py-2">Data</th>
+                                                        <th className="px-4 py-2">Canale</th>
+                                                        <th className="px-4 py-2">Titolo</th>
+                                                        <th className="px-4 py-2">Stato</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                                    {importPreview.data.slice(0, 50).map((post, idx) => (
+                                                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                                                            <td className="px-4 py-2 font-mono whitespace-nowrap text-gray-600 dark:text-gray-300">{moment(post.date).format('DD/MM/YYYY HH:mm')}</td>
+                                                            <td className="px-4 py-2">
+                                                                <span className="px-2 py-0.5 rounded text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                                                                    {post.social}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200 truncate max-w-xs">{post.title}</td>
+                                                            <td className="px-4 py-2 text-xs capitalize text-gray-500 dark:text-gray-400">{post.status}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                            {importPreview.data.length > 50 && (
+                                                <div className="p-2 text-center text-xs text-gray-400 bg-gray-50 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
+                                                    ...e altri {importPreview.data.length - 50} post
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750 flex justify-end gap-3 flex-shrink-0">
+                                <button 
+                                    onClick={cancelImport}
+                                    className="px-5 py-2.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 font-bold hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    Annulla
+                                </button>
+                                <button 
+                                    onClick={confirmImport}
+                                    disabled={importPreview.valid === 0}
+                                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {importPreview.valid > 0 ? (
+                                        <>
+                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                            Importa {importPreview.valid} Post
+                                        </>
+                                    ) : (
+                                        'Nessun post valido'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* MODALE CAMPAGNE */}
                 {isCampaignsModalOpen && (
                     <CampaignsManager 
