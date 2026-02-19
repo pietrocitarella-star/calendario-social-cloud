@@ -87,6 +87,13 @@ const PostModal: React.FC<PostModalProps> = ({
             }
         }
 
+        // AUTOMAZIONE: Se seleziono "Short", il canale diventa YouTube
+        if (name === 'postType') {
+            if (value === PostType.Short) {
+                updated.social = 'YouTube';
+            }
+        }
+
         return updated;
     });
 

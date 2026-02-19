@@ -31,6 +31,7 @@ export enum PostType {
   Story = 'storia',
   Update = 'aggiornamento',
   Repost = 'repost',
+  Short = 'short',
 }
 
 export interface PostVersion {
