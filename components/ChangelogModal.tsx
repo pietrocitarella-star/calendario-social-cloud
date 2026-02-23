@@ -9,6 +9,15 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.10.0',
+        date: '22/11/2025',
+        changes: [
+            'Nuova Vista Bacheca (Kanban): Organizza i tuoi post come in Trello! Trascina le card da una colonna all\'altra per cambiare stato (es. da "Bozza" a "Approvazione").',
+            'Filtri Temporali Bacheca: Nella vista Kanban puoi filtrare rapidamente i post per "Questa Settimana", "Questo Mese" o "Prossimo Mese" per focalizzarti sulle scadenze imminenti.',
+            'Supporto YouTube Shorts: Reintrodotto il tipo di contenuto "Short". Selezionandolo, il canale viene impostato automaticamente su YouTube per velocizzare l\'inserimento.'
+        ]
+    },
+    {
         version: '2.9.2',
         date: '21/11/2025',
         changes: [

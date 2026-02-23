@@ -38,6 +38,7 @@ const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
 const DayDetailsModal = lazy(() => import('./components/DayDetailsModal'));
 const FollowersModal = lazy(() => import('./components/FollowersModal')); 
 const CampaignsManager = lazy(() => import('./components/CampaignsManager')); // NUOVO
+const KanbanBoard = lazy(() => import('./components/KanbanBoard')); // NUOVO
 
 moment.locale('it');
 moment.updateLocale('it', {
@@ -115,6 +116,7 @@ const App: React.FC = () => {
     
     const [view, setView] = useState(Views.MONTH);
     const [date, setDate] = useState(new Date());
+    const [viewMode, setViewMode] = useState<'CALENDAR' | 'KANBAN'>('CALENDAR'); // NUOVO STATO VISTA PRINCIPALE
 
     const [selectedEvent, setSelectedEvent] = useState<Partial<Post> | null>(null);
     // State per il context campagne (se stiamo creando un post dentro una campagna)
@@ -988,6 +990,9 @@ const App: React.FC = () => {
                         allPosts={globalSearchIndex}
                         onSearchResultSelect={handleSearchResultSelect}
                         onSearchSubmit={handleSearchSubmit} 
+                        // NUOVE PROPS PER KANBAN
+                        currentViewMode={viewMode}
+                        onViewModeChange={setViewMode}
                     />
                     
                     {/* AGENDA BULK ACTIONS TOOLBAR (Visibile solo in view Agenda) */}
@@ -1037,7 +1042,7 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex-grow min-h-0 bg-white dark:bg-gray-800 rounded-lg shadow-lg relative p-2 md:p-4 overflow-hidden flex flex-col">
-                    {/* RENDER CONDIZIONALE: CALENDARIO O RISULTATI RICERCA */}
+                    {/* RENDER CONDIZIONALE: CALENDARIO O RISULTATI RICERCA O KANBAN */}
                     {isSearchMode ? (
                         <div className="flex flex-col h-full animate-fadeIn">
                             <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
@@ -1118,6 +1123,13 @@ const App: React.FC = () => {
                                 )}
                             </div>
                         </div>
+                    ) : viewMode === 'KANBAN' ? (
+                        <KanbanBoard 
+                            posts={posts.filter(p => isPostVisible(p))} 
+                            socialChannels={socialChannels}
+                            onUpdatePostStatus={(post, newStatus) => handleSavePost({ ...post, status: newStatus })}
+                            onEditPost={(post) => { setSelectedEvent(post); setIsPostModalOpen(true); }}
+                        />
                     ) : (
                         <Calendar
                             style={{ height: '100%' }}
