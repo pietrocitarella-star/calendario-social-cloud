@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Post, PostStatus, SocialChannel } from '../types';
+import { Post, PostStatus, SocialChannel, KanbanTimeFilter } from '../types';
 import { STATUS_COLORS, POST_STATUSES } from '../constants';
 import moment from 'moment';
 
@@ -8,15 +8,32 @@ interface KanbanBoardProps {
     socialChannels: SocialChannel[];
     onUpdatePostStatus: (post: Post, newStatus: PostStatus) => void;
     onEditPost: (post: Post) => void;
+    
+    // Props per filtri temporali gestiti dal padre (App.tsx)
+    timeFilter: KanbanTimeFilter;
+    setTimeFilter: (filter: KanbanTimeFilter) => void;
+    customStartDate: string;
+    setCustomStartDate: (date: string) => void;
+    customEndDate: string;
+    setCustomEndDate: (date: string) => void;
 }
 
-const KanbanBoard: React.FC<KanbanBoardProps> = ({ posts, socialChannels, onUpdatePostStatus, onEditPost }) => {
+const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
+    posts, 
+    socialChannels, 
+    onUpdatePostStatus, 
+    onEditPost,
+    timeFilter,
+    setTimeFilter,
+    customStartDate,
+    setCustomStartDate,
+    customEndDate,
+    setCustomEndDate
+}) => {
     const [draggedPostId, setDraggedPostId] = useState<string | null>(null);
-    const [timeFilter, setTimeFilter] = useState<'ALL' | 'WEEK' | 'MONTH' | 'NEXT_MONTH' | 'CUSTOM'>('MONTH');
-    const [customStartDate, setCustomStartDate] = useState<string>(moment().startOf('month').format('YYYY-MM-DD'));
-    const [customEndDate, setCustomEndDate] = useState<string>(moment().endOf('month').format('YYYY-MM-DD'));
 
-    // Filtra i post in base al periodo selezionato
+    // Filtra i post in base al periodo selezionato (anche se App.tsx filtra già la subscription,
+    // è utile filtrare qui per sicurezza o per raffinare la vista se la subscription è più ampia)
     const filteredPosts = useMemo(() => {
         const now = moment();
         return posts.filter(post => {

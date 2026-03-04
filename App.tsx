@@ -117,6 +117,15 @@ const App: React.FC = () => {
     const [view, setView] = useState(Views.MONTH);
     const [date, setDate] = useState(new Date());
     const [viewMode, setViewMode] = useState<'CALENDAR' | 'KANBAN'>('CALENDAR'); // NUOVO STATO VISTA PRINCIPALE
+    
+    // STATO FILTRI KANBAN (Spostato qui per gestire la subscription corretta)
+    const [kanbanTimeFilter, setKanbanTimeFilter] = useState<KanbanTimeFilter>('MONTH');
+    const [kanbanStartDate, setKanbanStartDate] = useState<string>(moment().startOf('month').format('YYYY-MM-DD'));
+    const [kanbanEndDate, setKanbanEndDate] = useState<string>(moment().endOf('month').format('YYYY-MM-DD'));
+
+    // SELECTION MODE STATE (Search View)
+    const [isSearchSelectionMode, setIsSearchSelectionMode] = useState(false);
+    const [selectedSearchPostIds, setSelectedSearchPostIds] = useState<string[]>([]);
 
     const [selectedEvent, setSelectedEvent] = useState<Partial<Post> | null>(null);
     // State per il context campagne (se stiamo creando un post dentro una campagna)
@@ -228,14 +237,48 @@ const App: React.FC = () => {
             return;
         }
 
-        const startDate = moment(date).subtract(2, 'months').startOf('month').format('YYYY-MM-DD');
-        const endDate = moment(date).add(2, 'months').endOf('month').format('YYYY-MM-DD');
+        let startDate: string;
+        let endDate: string;
+
+        if (viewMode === 'KANBAN') {
+            const now = moment();
+            switch (kanbanTimeFilter) {
+                case 'WEEK':
+                    startDate = now.startOf('week').format('YYYY-MM-DD');
+                    endDate = now.endOf('week').format('YYYY-MM-DD');
+                    break;
+                case 'MONTH':
+                    startDate = now.startOf('month').format('YYYY-MM-DD');
+                    endDate = now.endOf('month').format('YYYY-MM-DD');
+                    break;
+                case 'NEXT_MONTH':
+                    const nextMonth = now.clone().add(1, 'month');
+                    startDate = nextMonth.startOf('month').format('YYYY-MM-DD');
+                    endDate = nextMonth.endOf('month').format('YYYY-MM-DD');
+                    break;
+                case 'CUSTOM':
+                    startDate = kanbanStartDate;
+                    endDate = kanbanEndDate;
+                    break;
+                case 'ALL':
+                default:
+                    // Per "Tutti", carichiamo un range molto ampio (es. 2023-2030)
+                    // O meglio, usiamo un range ragionevole per evitare sovraccarico
+                    startDate = '2023-01-01';
+                    endDate = '2030-12-31';
+                    break;
+            }
+        } else {
+            // CALENDAR VIEW: +/- 2 months buffer
+            startDate = moment(date).subtract(2, 'months').startOf('month').format('YYYY-MM-DD');
+            endDate = moment(date).add(2, 'months').endOf('month').format('YYYY-MM-DD');
+        }
 
         const unsubscribe = subscribeToPosts(startDate, endDate, (updatedPosts) => {
             setPosts(updatedPosts);
         });
         return () => unsubscribe(); 
-    }, [user, isAuthorized, date, view]);
+    }, [user, isAuthorized, date, view, viewMode, kanbanTimeFilter, kanbanStartDate, kanbanEndDate]);
 
     // LOAD GLOBAL INDEX FOR SEARCH (All history)
     useEffect(() => {
@@ -615,6 +658,49 @@ const App: React.FC = () => {
             return !prev;
         });
     }, []);
+
+    const handleToggleSearchSelectionMode = useCallback(() => {
+        setIsSearchSelectionMode(prev => {
+            if (prev) {
+                setSelectedSearchPostIds([]);
+            }
+            return !prev;
+        });
+    }, []);
+
+    const handleSelectSearchPost = useCallback((postId: string) => {
+        setSelectedSearchPostIds(prev => {
+            if (prev.includes(postId)) {
+                return prev.filter(id => id !== postId);
+            } else {
+                return [...prev, postId];
+            }
+        });
+    }, []);
+
+    const handleSelectAllSearchPosts = useCallback(() => {
+        if (selectedSearchPostIds.length === searchResults.length) {
+            setSelectedSearchPostIds([]);
+        } else {
+            setSelectedSearchPostIds(searchResults.map(p => p.id!).filter(Boolean));
+        }
+    }, [selectedSearchPostIds, searchResults]);
+
+    const handleExportSelectedSearchCsv = useCallback(() => {
+        if (selectedSearchPostIds.length === 0) return;
+        const postsToExport = searchResults.filter(p => p.id && selectedSearchPostIds.includes(p.id));
+        exportPostsToCsv(postsToExport);
+        setIsSearchSelectionMode(false);
+        setSelectedSearchPostIds([]);
+    }, [selectedSearchPostIds, searchResults]);
+
+    const handleExportSelectedSearchPdf = useCallback(() => {
+        if (selectedSearchPostIds.length === 0) return;
+        const postsToExport = searchResults.filter(p => p.id && selectedSearchPostIds.includes(p.id));
+        exportPostsToPdf(postsToExport);
+        setIsSearchSelectionMode(false);
+        setSelectedSearchPostIds([]);
+    }, [selectedSearchPostIds, searchResults]);
 
     const handleSaveChannels = useCallback(async (updatedChannels: SocialChannel[]) => {
         const channelsToDelete = socialChannels.filter(c => !updatedChannels.find(uc => uc.id === c.id));
@@ -1045,18 +1131,70 @@ const App: React.FC = () => {
                     {/* RENDER CONDIZIONALE: CALENDARIO O RISULTATI RICERCA O KANBAN */}
                     {isSearchMode ? (
                         <div className="flex flex-col h-full animate-fadeIn">
-                            <div className="flex justify-between items-center mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
-                                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                    Risultati Ricerca: "{searchTerm}"
-                                    <span className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">{searchResults.length}</span>
-                                </h2>
-                                <button 
-                                    onClick={handleBackToCalendar}
-                                    className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium transition-colors"
-                                >
-                                    Chiudi ricerca
-                                </button>
+                            <div className="flex flex-col gap-3 mb-4 border-b border-gray-100 dark:border-gray-700 pb-3">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                        Risultati Ricerca: "{searchTerm}"
+                                        <span className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">{searchResults.length}</span>
+                                    </h2>
+                                    <button 
+                                        onClick={handleBackToCalendar}
+                                        className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium transition-colors"
+                                    >
+                                        Chiudi ricerca
+                                    </button>
+                                </div>
+
+                                {searchResults.length > 0 && (
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                        <button
+                                            onClick={handleToggleSearchSelectionMode}
+                                            className={`px-3 py-1.5 rounded text-xs font-semibold transition-colors whitespace-nowrap ${
+                                                isSearchSelectionMode 
+                                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border border-blue-200 dark:border-blue-700' 
+                                                : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300'
+                                            }`}
+                                        >
+                                            {isSearchSelectionMode ? 'Annulla Selezione' : 'Seleziona per Export'}
+                                        </button>
+
+                                        {isSearchSelectionMode && (
+                                            <>
+                                                <button
+                                                    onClick={handleSelectAllSearchPosts}
+                                                    className="px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded text-xs font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap"
+                                                >
+                                                    {selectedSearchPostIds.length === searchResults.length ? 'Deseleziona Tutti' : 'Seleziona Tutti'}
+                                                </button>
+                                                
+                                                <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-1"></div>
+
+                                                <button
+                                                    onClick={handleExportSelectedSearchCsv}
+                                                    disabled={selectedSearchPostIds.length === 0}
+                                                    className="px-3 py-1.5 bg-green-600 text-white rounded text-xs font-bold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 whitespace-nowrap"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                    </svg>
+                                                    CSV
+                                                </button>
+
+                                                <button
+                                                    onClick={handleExportSelectedSearchPdf}
+                                                    disabled={selectedSearchPostIds.length === 0}
+                                                    className="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-bold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 whitespace-nowrap"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                    </svg>
+                                                    PDF
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             
                             <div className="overflow-y-auto flex-grow custom-scrollbar space-y-3 pr-2">
@@ -1071,14 +1209,45 @@ const App: React.FC = () => {
                                         const assignee = teamMembers.find(m => m.id === post.assignedTo);
                                         const channel = socialChannels.find(c => c.name === post.social);
                                         const channelColor = channel ? channel.color : '#9ca3af';
+                                        const isSelected = post.id ? selectedSearchPostIds.includes(post.id) : false;
 
                                         return (
                                             <div 
                                                 key={post.id} 
-                                                onClick={() => { handleSearchResultSelect(post); }}
-                                                className="bg-gray-50 dark:bg-gray-700/30 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors cursor-pointer group"
+                                                onClick={() => { 
+                                                    if (isSearchSelectionMode && post.id) {
+                                                        handleSelectSearchPost(post.id);
+                                                    } else {
+                                                        handleSearchResultSelect(post); 
+                                                    }
+                                                }}
+                                                className={`
+                                                    p-3 rounded-lg border transition-all cursor-pointer group relative
+                                                    ${isSelected 
+                                                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400 dark:border-blue-500 shadow-sm' 
+                                                        : 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600'
+                                                    }
+                                                `}
                                             >
-                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                {isSearchSelectionMode && (
+                                                    <div className="absolute top-3 left-3 z-10">
+                                                        <div className={`
+                                                            w-5 h-5 rounded border flex items-center justify-center transition-colors
+                                                            ${isSelected 
+                                                                ? 'bg-blue-600 border-blue-600' 
+                                                                : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-500 group-hover:border-blue-400'
+                                                            }
+                                                        `}>
+                                                            {isSelected && (
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isSearchSelectionMode ? 'pl-8' : ''}`}>
                                                     <div className="flex items-start gap-3 flex-grow min-w-0">
                                                         <div className="flex flex-col items-center min-w-[50px] pt-1">
                                                             <span className="text-[10px] font-bold text-gray-400 uppercase">{moment(post.date).format('MMM')}</span>
@@ -1129,6 +1298,14 @@ const App: React.FC = () => {
                             socialChannels={socialChannels}
                             onUpdatePostStatus={(post, newStatus) => handleSavePost({ ...post, status: newStatus })}
                             onEditPost={(post) => { setSelectedEvent(post); setIsPostModalOpen(true); }}
+                            
+                            // Props per filtri temporali
+                            timeFilter={kanbanTimeFilter}
+                            setTimeFilter={setKanbanTimeFilter}
+                            customStartDate={kanbanStartDate}
+                            setCustomStartDate={setKanbanStartDate}
+                            customEndDate={kanbanEndDate}
+                            setCustomEndDate={setKanbanEndDate}
                         />
                     ) : (
                         <Calendar

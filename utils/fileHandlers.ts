@@ -1,6 +1,8 @@
 
 import { Post, PostStatus, PostType, TeamMember, FollowerStat } from '../types';
 import moment from 'moment';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export interface ImportError {
     row: number;
@@ -85,6 +87,53 @@ export const exportPostsToCsv = (posts: Post[]) => {
     const csvString = convertToCsv(posts);
     const timestamp = getFormattedDate();
     downloadFile(csvString, `calendario-editoriale_${timestamp}.csv`, 'text/csv;charset=utf-8;');
+};
+
+export const exportPostsToPdf = (posts: Post[]) => {
+    const doc = new jsPDF();
+    const timestamp = getFormattedDate();
+
+    // Titolo del documento
+    doc.setFontSize(18);
+    doc.text('Calendario Editoriale', 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generato il: ${moment().format('DD/MM/YYYY HH:mm')}`, 14, 30);
+
+    // Definizione colonne e dati
+    const tableColumn = ["Data", "Titolo", "Canale", "Stato", "Tipo", "Assegnato a"];
+    const tableRows: any[] = [];
+
+    posts.forEach(post => {
+        const postData = [
+            moment(post.date).format('DD/MM/YYYY HH:mm'),
+            post.title,
+            post.social,
+            post.status,
+            post.postType,
+            post.assignedTo || '-'
+        ];
+        tableRows.push(postData);
+    });
+
+    autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [66, 133, 244] }, // Blue header
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+            0: { cellWidth: 25 }, // Data
+            1: { cellWidth: 'auto' }, // Titolo
+            2: { cellWidth: 20 }, // Canale
+            3: { cellWidth: 20 }, // Stato
+            4: { cellWidth: 20 }, // Tipo
+            5: { cellWidth: 25 }  // Assegnato
+        }
+    });
+
+    doc.save(`calendario-editoriale_${timestamp}.pdf`);
 };
 
 // --- CSV IMPORT LOGIC ---

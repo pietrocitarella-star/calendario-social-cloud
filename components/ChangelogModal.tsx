@@ -9,6 +9,33 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.12.0',
+        date: '03/03/2026',
+        changes: [
+            'Analisi Follower Avanzata: Nuova sezione per il monitoraggio degli obiettivi annuali di crescita (Target 4%).',
+            'Confronto Storico: Aggiunta tabella comparativa mese su mese per tutti gli anni disponibili.',
+            'Esclusione Canali: I calcoli degli obiettivi annuali escludono automaticamente WhatsApp e Telegram, come richiesto.',
+            'Correzione Calcoli: Risolto un problema di discrepanza tra i dati visualizzati nel grafico e quelli degli obiettivi annuali.'
+        ]
+    },
+    {
+        version: '2.11.1',
+        date: '24/11/2025',
+        changes: [
+            'Esportazione PDF: Aggiunta la possibilità di esportare i risultati della ricerca anche in formato PDF, oltre al CSV.',
+            'Miglioramenti UI Ricerca: Risolto un problema che impediva la visualizzazione corretta dei risultati di ricerca e del pulsante di selezione.'
+        ]
+    },
+    {
+        version: '2.11.0',
+        date: '24/11/2025',
+        changes: [
+            'Esportazione Risultati Ricerca: Ora puoi esportare i risultati della ricerca in CSV! Cerca i post, seleziona quelli che ti interessano e scarica il file.',
+            'Filtri Temporali Personalizzati Bacheca: Aggiunta la possibilità di selezionare un range di date personalizzato nella vista Kanban.',
+            'Riordino Colonne Bacheca: Ora puoi trascinare le colonne della bacheca per riordinarle a tuo piacimento.'
+        ]
+    },
+    {
         version: '2.10.0',
         date: '22/11/2025',
         changes: [

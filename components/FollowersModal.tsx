@@ -283,8 +283,9 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
         setPreviewData(null);
     };
 
-    // --- PROCESSO DATI "INTELLIGENTE" (FILL-FORWARD) ---
-    const processedData = useMemo(() => {
+    // --- PROCESSO DATI COMPLETO (SENZA FILTRI DATA) PER OBIETTIVI ANNUALI ---
+    // Serve per calcolare correttamente la crescita YTD anche se l'utente sta visualizzando solo l'ultimo mese
+    const fullHistoryData = useMemo(() => {
         const sortedStats = [...stats].sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf());
         
         const result: { date: string, total: number, channels: Record<string, number> }[] = [];
@@ -316,15 +317,208 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
             });
         });
 
-        // FILTRO FINALE SUL PERIODO (Usando le date impostate dagli input)
+        return result;
+    }, [stats, activeFilters, channels]);
+
+    // --- PROCESSO DATI FILTRATO (PER GRAFICI E KPI PERIODO) ---
+    const processedData = useMemo(() => {
+        // Usa i dati completi e applica solo il filtro data
         if (analysisStartDate && analysisEndDate) {
             const start = moment(analysisStartDate).startOf('day');
             const end = moment(analysisEndDate).endOf('day');
-            return result.filter(d => moment(d.date).isBetween(start, end, undefined, '[]'));
+            return fullHistoryData.filter(d => moment(d.date).isBetween(start, end, undefined, '[]'));
         }
+        return fullHistoryData;
+    }, [fullHistoryData, analysisStartDate, analysisEndDate]);
 
-        return result;
-    }, [stats, activeFilters, channels, analysisStartDate, analysisEndDate]);
+    // --- NUOVI CALCOLI PER OBIETTIVI ANNUALI E CONFRONTI ---
+
+    // 1. Raggruppa i dati per Anno/Mese usando lo STORICO COMPLETO
+    const monthlyDataByYear = useMemo(() => {
+        const map: Record<number, Record<number, number>> = {}; // Anno -> Mese (0-11) -> Totale
+        
+        // Usa fullHistoryData invece di processedData per avere tutto l'anno
+        const sorted = [...fullHistoryData].sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf());
+        
+        sorted.forEach(stat => {
+            const d = moment(stat.date);
+            const year = d.year();
+            const month = d.month();
+            
+            if (!map[year]) map[year] = {};
+            map[year][month] = stat.total;
+        });
+
+        // Fill forward mensile
+        Object.keys(map).forEach(yKey => {
+            const year = parseInt(yKey);
+            let lastVal = 0;
+            if (map[year-1] && map[year-1][11]) lastVal = map[year-1][11];
+
+            for (let m = 0; m < 12; m++) {
+                if (map[year][m] !== undefined) {
+                    lastVal = map[year][m];
+                } else if (lastVal > 0 && (moment().year() > year || (moment().year() === year && moment().month() >= m))) {
+                    map[year][m] = lastVal;
+                }
+            }
+        });
+
+        return map;
+    }, [fullHistoryData]);
+
+    // 2. Calcola la crescita annuale per ogni anno disponibile
+    const yearlyGrowthStats = useMemo(() => {
+        const years = Object.keys(monthlyDataByYear).map(Number).sort((a, b) => b - a); // Dal più recente
+        
+        return years.map(year => {
+            // Valore Iniziale: Dicembre anno precedente O Primo mese disponibile anno corrente
+            let startVal = 0;
+            if (monthlyDataByYear[year-1] && monthlyDataByYear[year-1][11]) {
+                startVal = monthlyDataByYear[year-1][11];
+            } else {
+                // Trova il primo mese con dati
+                const firstMonth = Object.keys(monthlyDataByYear[year]).map(Number).sort((a, b) => a - b)[0];
+                startVal = monthlyDataByYear[year][firstMonth] || 0;
+            }
+
+            // Valore Finale: Ultimo mese disponibile anno corrente
+            const months = Object.keys(monthlyDataByYear[year]).map(Number).sort((a, b) => b - a);
+            const lastMonth = months[0];
+            const endVal = monthlyDataByYear[year][lastMonth] || 0;
+
+            const diff = endVal - startVal;
+            const percent = startVal > 0 ? (diff / startVal) * 100 : 0;
+            
+            // Proiezione a fine anno (se anno corrente e non finito)
+            let projectedPercent = 0;
+            if (year === moment().year() && lastMonth < 11) {
+                const monthsPassed = lastMonth + 1; // Gennaio è 0
+                const avgMonthlyGrowth = diff / monthsPassed;
+                const projectedEndVal = startVal + (avgMonthlyGrowth * 12);
+                projectedPercent = startVal > 0 ? ((projectedEndVal - startVal) / startVal) * 100 : 0;
+            }
+
+            return {
+                year,
+                startVal,
+                endVal,
+                diff,
+                percent,
+                projectedPercent,
+                isCurrentYear: year === moment().year()
+            };
+        });
+    }, [monthlyDataByYear]);
+
+    // --- RENDER COMPONENTI AUSILIARI ---
+
+    const renderYearlyGrowthCard = (stat: any) => {
+        const target = 4; // 4% Target
+        const progress = Math.min(100, Math.max(0, (stat.percent / target) * 100));
+        const isTargetReached = stat.percent >= target;
+
+        return (
+            <div key={stat.year} className="bg-white dark:bg-gray-750 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mb-4">
+                <div className="flex justify-between items-start mb-2">
+                    <div>
+                        <h4 className="font-bold text-gray-800 dark:text-white text-lg flex items-center gap-2">
+                            {stat.year}
+                            {stat.isCurrentYear && <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full uppercase">In corso</span>}
+                        </h4>
+                        <p className="text-xs text-gray-500">Target Annuale: <span className="font-bold">4%</span></p>
+                    </div>
+                    <div className="text-right">
+                        <div className={`text-2xl font-extrabold ${isTargetReached ? 'text-green-500' : 'text-gray-700 dark:text-gray-200'}`}>
+                            {stat.percent > 0 ? '+' : ''}{stat.percent.toFixed(2)}%
+                        </div>
+                        <p className="text-[10px] text-gray-400">
+                            {stat.diff > 0 ? '+' : ''}{stat.diff.toLocaleString()} follower
+                        </p>
+                    </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="relative pt-1">
+                    <div className="flex mb-2 items-center justify-between">
+                        <div className="text-right w-full">
+                            <span className="text-[10px] font-semibold inline-block text-gray-600 dark:text-gray-400">
+                                {progress.toFixed(0)}% del target raggiunto
+                            </span>
+                        </div>
+                    </div>
+                    <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+                        <div style={{ width: `${progress}%` }} className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${isTargetReached ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+                    </div>
+                </div>
+
+                {stat.isCurrentYear && stat.projectedPercent > 0 && (
+                    <div className="mt-2 text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded border border-gray-100 dark:border-gray-700">
+                        <span className="font-bold text-gray-600 dark:text-gray-300">🔮 Proiezione Fine Anno: </span>
+                        <span className={stat.projectedPercent >= target ? 'text-green-600 font-bold' : 'text-orange-500'}>
+                            {stat.projectedPercent > 0 ? '+' : ''}{stat.projectedPercent.toFixed(2)}%
+                        </span>
+                        <span className="text-gray-400 ml-1">
+                            (basato sul trend attuale)
+                        </span>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const renderComparisonTable = () => {
+        const years = Object.keys(monthlyDataByYear).map(Number).sort((a, b) => b - a);
+        const months = moment.monthsShort();
+
+        if (years.length === 0) return <div className="text-center text-gray-400 py-4">Nessun dato per il confronto.</div>;
+
+        return (
+            <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                    <thead>
+                        <tr className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                            <th className="p-2 font-bold text-gray-500">Mese</th>
+                            {years.map(y => (
+                                <th key={y} className="p-2 font-bold text-gray-700 dark:text-gray-300 text-right">{y}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {months.map((mName, mIdx) => (
+                            <tr key={mName} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                <td className="p-2 font-medium text-gray-600 dark:text-gray-400">{mName}</td>
+                                {years.map(y => {
+                                    const val = monthlyDataByYear[y][mIdx];
+                                    // Calcola delta rispetto allo stesso mese anno precedente
+                                    let deltaEl = null;
+                                    if (monthlyDataByYear[y-1] && monthlyDataByYear[y-1][mIdx]) {
+                                        const prev = monthlyDataByYear[y-1][mIdx];
+                                        const diff = val - prev;
+                                        const perc = prev > 0 ? (diff / prev) * 100 : 0;
+                                        deltaEl = (
+                                            <span className={`ml-1 text-[9px] ${diff >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                                {diff > 0 ? '▲' : '▼'} {Math.abs(perc).toFixed(1)}%
+                                            </span>
+                                        );
+                                    }
+
+                                    return (
+                                        <td key={y} className="p-2 text-right text-gray-800 dark:text-gray-200">
+                                            {val ? val.toLocaleString() : '-'}
+                                            {val && deltaEl}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
+
+    // --- FINE NUOVI CALCOLI ---
 
     const latestData = processedData.length > 0 
         ? processedData[processedData.length - 1] 
@@ -683,6 +877,24 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                                         Variazione percentuale nel periodo
                                     </p>
                                 </div>
+                            </div>
+
+                            {/* OBIETTIVI ANNUALI (NEW SECTION) */}
+                            <div className="bg-white dark:bg-gray-750 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                                <h3 className="font-bold text-gray-800 dark:text-white mb-4 text-sm flex items-center gap-2">
+                                    <span className="text-xl">🎯</span> Obiettivi Annuali (Target 4%)
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {yearlyGrowthStats.map(stat => renderYearlyGrowthCard(stat))}
+                                </div>
+                            </div>
+
+                            {/* CONFRONTO STORICO (NEW SECTION) */}
+                            <div className="bg-white dark:bg-gray-750 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                                <h3 className="font-bold text-gray-800 dark:text-white mb-4 text-sm flex items-center gap-2">
+                                    <span className="text-xl">📅</span> Confronto Mensile Anno su Anno
+                                </h3>
+                                {renderComparisonTable()}
                             </div>
 
                             {/* CHARTS */}

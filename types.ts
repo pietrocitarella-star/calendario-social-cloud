@@ -34,6 +34,8 @@ export enum PostType {
   Short = 'short',
 }
 
+export type KanbanTimeFilter = 'ALL' | 'WEEK' | 'MONTH' | 'NEXT_MONTH' | 'CUSTOM';
+
 export interface PostVersion {
   timestamp: string;
   data: Omit<Post, 'history'>;
