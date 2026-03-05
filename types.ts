@@ -89,3 +89,19 @@ export interface FollowerStat {
     total: number; // Totale calcolato (esclusi messaggistica)
     growthRate?: number; // Percentuale rispetto al mese precedente
 }
+
+export interface VerticalPage {
+    id: string;
+    name: string;
+    platform: string; // Es. 'Facebook', 'Instagram'
+    description?: string;
+    color: string;
+    isActive: boolean;
+    createdAt: string;
+}
+
+export interface VerticalStat {
+    id?: string;
+    date: string;
+    pages: Record<string, number>; // pageId -> follower count
+}

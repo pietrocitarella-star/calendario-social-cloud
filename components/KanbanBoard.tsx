@@ -54,7 +54,25 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({
         });
     }, [posts, timeFilter, customStartDate, customEndDate]);
 
-    const [orderedStatuses, setOrderedStatuses] = useState<PostStatus[]>(POST_STATUSES);
+    const [orderedStatuses, setOrderedStatuses] = useState<PostStatus[]>(() => {
+        const savedOrder = localStorage.getItem('kanbanColumnOrder');
+        if (savedOrder) {
+            try {
+                const parsed = JSON.parse(savedOrder);
+                // Validazione base: controlla se tutti gli stati sono presenti
+                const isValid = POST_STATUSES.every(s => parsed.includes(s)) && parsed.length === POST_STATUSES.length;
+                if (isValid) return parsed;
+            } catch (e) {
+                console.error("Errore nel parsing dell'ordine colonne salvato", e);
+            }
+        }
+        return POST_STATUSES;
+    });
+
+    // Salva l'ordine nel localStorage quando cambia
+    React.useEffect(() => {
+        localStorage.setItem('kanbanColumnOrder', JSON.stringify(orderedStatuses));
+    }, [orderedStatuses]);
     const [draggedColumnStatus, setDraggedColumnStatus] = useState<PostStatus | null>(null);
 
     // Raggruppa i post per stato

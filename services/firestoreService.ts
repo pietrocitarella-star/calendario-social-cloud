@@ -21,6 +21,8 @@ const CHANNELS_COLLECTION = 'channels';
 const TEAM_COLLECTION = 'team_members';
 const STATS_COLLECTION = 'follower_stats';
 const CAMPAIGNS_COLLECTION = 'campaigns';
+const VERTICAL_PAGES_COLLECTION = 'vertical_pages';
+const VERTICAL_STATS_COLLECTION = 'vertical_stats';
 
 // --- HELPERS ---
 
@@ -401,7 +403,106 @@ export const deleteFollowerStat = async (id: string): Promise<void> => {
     }
 };
 
-// --- CAMPAIGNS MANAGEMENT ---
+// --- VERTICAL PAGES MANAGEMENT ---
+
+export const subscribeToVerticalPages = (callback: (pages: VerticalPage[]) => void) => {
+    const q = query(collection(db, VERTICAL_PAGES_COLLECTION), orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const pages: VerticalPage[] = [];
+        snapshot.forEach((doc) => {
+            pages.push({ id: doc.id, ...(doc.data() as any) } as VerticalPage);
+        });
+        callback(pages);
+    }, (error) => {
+        console.error("Errore sottoscrizione pagine verticali:", error);
+    });
+
+    return unsubscribe;
+};
+
+export const addVerticalPage = async (page: Omit<VerticalPage, 'id'>): Promise<void> => {
+    try {
+        await addDoc(collection(db, VERTICAL_PAGES_COLLECTION), page);
+    } catch (e) {
+        handleError('aggiunta pagina verticale', e);
+        throw e;
+    }
+};
+
+export const updateVerticalPage = async (id: string, data: Partial<VerticalPage>): Promise<void> => {
+    try {
+        const docRef = doc(db, VERTICAL_PAGES_COLLECTION, id);
+        await updateDoc(docRef, data);
+    } catch (e) {
+        handleError('aggiornamento pagina verticale', e);
+        throw e;
+    }
+};
+
+export const deleteVerticalPage = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(db, VERTICAL_PAGES_COLLECTION, id));
+    } catch (e) {
+        handleError('eliminazione pagina verticale', e);
+        throw e;
+    }
+};
+
+// --- VERTICAL STATS MANAGEMENT ---
+
+export const subscribeToVerticalStats = (callback: (stats: VerticalStat[]) => void) => {
+    const q = query(collection(db, VERTICAL_STATS_COLLECTION), orderBy('date', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const stats: VerticalStat[] = [];
+        snapshot.forEach((doc) => {
+            stats.push({ id: doc.id, ...(doc.data() as any) } as VerticalStat);
+        });
+        callback(stats);
+    }, (error) => {
+        console.error("Errore sottoscrizione stats verticali:", error);
+    });
+
+    return unsubscribe;
+};
+
+export const addVerticalStat = async (stat: VerticalStat): Promise<void> => {
+    try {
+        const { id, ...data } = stat;
+        const q = query(collection(db, VERTICAL_STATS_COLLECTION), where('date', '==', stat.date));
+        const snapshot = await getDocs(q);
+        
+        if (!snapshot.empty) {
+            const existingDoc = snapshot.docs[0];
+            const existingData = existingDoc.data() as VerticalStat;
+            
+            const mergedPages = {
+                ...(existingData.pages || {}),
+                ...stat.pages
+            };
+            
+            const docRef = doc(db, VERTICAL_STATS_COLLECTION, existingDoc.id);
+            await updateDoc(docRef, {
+                pages: mergedPages
+            });
+        } else {
+            await addDoc(collection(db, VERTICAL_STATS_COLLECTION), data);
+        }
+    } catch (e) {
+        handleError('salvataggio statistiche verticali', e);
+        throw e;
+    }
+};
+
+export const deleteVerticalStat = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(db, VERTICAL_STATS_COLLECTION, id));
+    } catch (e) {
+        handleError('eliminazione statistica verticale', e);
+        throw e;
+    }
+};
 
 export const subscribeToCampaigns = (callback: (campaigns: Campaign[]) => void) => {
     const q = query(collection(db, CAMPAIGNS_COLLECTION), orderBy('startDate', 'desc'));

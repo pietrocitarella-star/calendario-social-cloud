@@ -9,6 +9,22 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.13.0',
+        date: '05/03/2026',
+        changes: [
+            'Nuova sezione "Progetti Verticali": Monitora pagine ed eventi specifici separatamente dai canali principali.',
+            'Gestione dinamica delle pagine verticali (aggiunta, modifica, eliminazione).',
+            'Inserimento dati e grafici dedicati per i progetti verticali.',
+        ]
+    },
+    {
+        version: '2.12.1',
+        date: '05/03/2026',
+        changes: [
+            'Miglioramento Kanban: Ora l\'ordine personalizzato delle colonne della bacheca viene salvato e mantenuto anche dopo il riavvio dell\'app.',
+        ]
+    },
+    {
         version: '2.12.0',
         date: '03/03/2026',
         changes: [

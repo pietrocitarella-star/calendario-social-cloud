@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { SocialChannel, FollowerStat } from '../types';
-import { addFollowerStat, subscribeToFollowerStats, deleteFollowerStat } from '../services/firestoreService';
+import { SocialChannel, FollowerStat, VerticalPage, VerticalStat } from '../types';
+import { 
+    addFollowerStat, 
+    subscribeToFollowerStats, 
+    deleteFollowerStat,
+    subscribeToVerticalPages,
+    addVerticalPage,
+    updateVerticalPage,
+    deleteVerticalPage,
+    subscribeToVerticalStats,
+    addVerticalStat,
+    deleteVerticalStat
+} from '../services/firestoreService';
 import { parseFollowersCsv } from '../utils/fileHandlers';
 import moment from 'moment';
 
@@ -133,13 +144,49 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [previewData, setPreviewData] = useState<FollowerStat[] | null>(null);
 
+    // --- VERTICALS STATE ---
+    const [viewMode, setViewMode] = useState<'MAIN' | 'VERTICALS'>('MAIN');
+    const [verticalPages, setVerticalPages] = useState<VerticalPage[]>([]);
+    const [verticalStats, setVerticalStats] = useState<VerticalStat[]>([]);
+    const [verticalEntryDate, setVerticalEntryDate] = useState(moment().format('YYYY-MM-DD'));
+    const [verticalInputValues, setVerticalInputValues] = useState<Record<string, number>>({});
+    
+    // Vertical Page Management State
+    const [isPageManagerOpen, setIsPageManagerOpen] = useState(false);
+    const [editingPage, setEditingPage] = useState<VerticalPage | null>(null);
+    const [newPageName, setNewPageName] = useState('');
+    const [newPagePlatform, setNewPagePlatform] = useState('Facebook');
+    const [newPageDesc, setNewPageDesc] = useState('');
+    const [newPageColor, setNewPageColor] = useState('#3b82f6');
+
     useEffect(() => {
         if (!isOpen) return;
-        const unsubscribe = subscribeToFollowerStats((data) => {
+        const unsubscribeStats = subscribeToFollowerStats((data) => {
             setStats(data);
         });
-        return () => unsubscribe();
+        const unsubscribePages = subscribeToVerticalPages((data) => {
+            setVerticalPages(data);
+        });
+        const unsubscribeVStats = subscribeToVerticalStats((data) => {
+            setVerticalStats(data);
+        });
+
+        return () => {
+            unsubscribeStats();
+            unsubscribePages();
+            unsubscribeVStats();
+        };
     }, [isOpen]);
+
+    // Sync vertical inputs when date changes
+    useEffect(() => {
+        const existingEntry = verticalStats.find(s => s.date === verticalEntryDate);
+        if (existingEntry) {
+            setVerticalInputValues(existingEntry.pages);
+        } else {
+            setVerticalInputValues({});
+        }
+    }, [verticalEntryDate, verticalStats]);
 
     useEffect(() => {
         const existingEntry = stats.find(s => s.date === entryDate);
@@ -282,6 +329,96 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
     const cancelImport = () => {
         setPreviewData(null);
     };
+
+    // --- VERTICALS LOGIC ---
+
+    const handleSaveVerticalStat = async () => {
+        const newStat: VerticalStat = {
+            date: verticalEntryDate,
+            pages: verticalInputValues
+        };
+
+        try {
+            await addVerticalStat(newStat);
+            alert("Dati verticali salvati correttamente!");
+        } catch (error) {
+            console.error(error);
+            alert("Errore nel salvataggio.");
+        }
+    };
+
+    const handleDeleteVerticalStat = async (id?: string) => {
+        if (!id) return;
+        if (window.confirm("Eliminare questa rilevazione verticale?")) {
+            await deleteVerticalStat(id);
+        }
+    };
+
+    const handleSavePage = async () => {
+        if (!newPageName.trim()) return alert("Inserisci un nome per la pagina");
+
+        const pageData = {
+            name: newPageName,
+            platform: newPagePlatform,
+            description: newPageDesc,
+            color: newPageColor,
+            isActive: true,
+            createdAt: new Date().toISOString()
+        };
+
+        try {
+            if (editingPage) {
+                await updateVerticalPage(editingPage.id, pageData);
+            } else {
+                await addVerticalPage(pageData);
+            }
+            // Reset form
+            setEditingPage(null);
+            setNewPageName('');
+            setNewPageDesc('');
+            setNewPageColor('#3b82f6');
+            setIsPageManagerOpen(false);
+        } catch (e) {
+            console.error(e);
+            alert("Errore nel salvataggio pagina");
+        }
+    };
+
+    const handleEditPage = (page: VerticalPage) => {
+        setEditingPage(page);
+        setNewPageName(page.name);
+        setNewPagePlatform(page.platform);
+        setNewPageDesc(page.description || '');
+        setNewPageColor(page.color);
+        setIsPageManagerOpen(true);
+    };
+
+    const handleDeletePage = async (id: string) => {
+        if (window.confirm("Sei sicuro? Questo non cancellerà i dati storici ma rimuoverà la pagina dalla lista.")) {
+            await deleteVerticalPage(id);
+        }
+    };
+
+    const handleVerticalInputChange = (pageId: string, value: string) => {
+        setVerticalInputValues(prev => ({
+            ...prev,
+            [pageId]: parseInt(value) || 0
+        }));
+    };
+
+    // Prepare Vertical Data for Chart
+    const processedVerticalData = useMemo(() => {
+        const sorted = [...verticalStats].sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf());
+        // Map to format compatible with FollowersLineChart (needs 'total' property, but here we might want multi-line or just total of selected)
+        // For now, let's show total of ALL active vertical pages
+        return sorted.map(stat => {
+            const total = Object.entries(stat.pages).reduce((acc, [pid, val]) => {
+                // Include only if page still exists (optional check)
+                return acc + (Number(val) || 0);
+            }, 0);
+            return { date: stat.date, total };
+        });
+    }, [verticalStats]);
 
     // --- PROCESSO DATI COMPLETO (SENZA FILTRI DATA) PER OBIETTIVI ANNUALI ---
     // Serve per calcolare correttamente la crescita YTD anche se l'utente sta visualizzando solo l'ultimo mese
@@ -656,14 +793,34 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                         <p className="text-sm text-gray-500 dark:text-gray-400">Analisi trend e inserimento dati</p>
                     </div>
                     
+                    {/* VIEW MODE TOGGLE */}
+                    <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 mx-4">
+                        <button 
+                            onClick={() => setViewMode('MAIN')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${viewMode === 'MAIN' ? 'bg-white dark:bg-gray-600 shadow text-blue-600 dark:text-blue-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                        >
+                            Canali Principali
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('VERTICALS')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${viewMode === 'VERTICALS' ? 'bg-white dark:bg-gray-600 shadow text-purple-600 dark:text-purple-300' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                        >
+                            Progetti Verticali
+                        </button>
+                    </div>
+
                     <div className="flex items-center gap-2">
-                        <button onClick={handleExportCSV} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 rounded-lg text-sm font-medium border border-emerald-200 dark:border-emerald-800 transition-colors hidden sm:block">
-                            Esporta CSV
-                        </button>
-                        <button onClick={handlePrint} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-lg text-sm font-medium border border-indigo-200 dark:border-indigo-800 transition-colors hidden sm:block">
-                            Stampa PDF
-                        </button>
-                        <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1 hidden sm:block"></div>
+                        {viewMode === 'MAIN' && (
+                            <>
+                                <button onClick={handleExportCSV} className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 rounded-lg text-sm font-medium border border-emerald-200 dark:border-emerald-800 transition-colors hidden sm:block">
+                                    Esporta CSV
+                                </button>
+                                <button onClick={handlePrint} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-lg text-sm font-medium border border-indigo-200 dark:border-indigo-800 transition-colors hidden sm:block">
+                                    Stampa PDF
+                                </button>
+                                <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1 hidden sm:block"></div>
+                            </>
+                        )}
                         <button onClick={onClose} className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600">
                             <svg className="w-6 h-6 text-gray-600 dark:text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
@@ -671,7 +828,201 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
                 </div>
 
                 <div className="flex-grow overflow-y-auto custom-scrollbar p-6">
-                    <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+                    
+                    {viewMode === 'VERTICALS' ? (
+                        /* --- VERTICALS VIEW --- */
+                        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+                            {/* LEFT: DATA ENTRY & MANAGEMENT */}
+                            <div className="xl:col-span-1 space-y-6">
+                                {/* PAGE MANAGER CARD */}
+                                <div className="bg-white dark:bg-gray-750 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                            📑 Pagine Verticali
+                                        </h3>
+                                        <button 
+                                            onClick={() => {
+                                                setEditingPage(null);
+                                                setNewPageName('');
+                                                setNewPageDesc('');
+                                                setIsPageManagerOpen(!isPageManagerOpen);
+                                            }}
+                                            className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200 font-bold"
+                                        >
+                                            {isPageManagerOpen ? 'Chiudi' : '+ Aggiungi'}
+                                        </button>
+                                    </div>
+
+                                    {isPageManagerOpen && (
+                                        <div className="mb-6 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg border border-purple-100 dark:border-gray-600 animate-fadeIn">
+                                            <h4 className="text-xs font-bold text-purple-600 mb-2 uppercase">{editingPage ? 'Modifica Pagina' : 'Nuova Pagina'}</h4>
+                                            <div className="space-y-2">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Nome Pagina (es. Napoli 2026)" 
+                                                    value={newPageName}
+                                                    onChange={e => setNewPageName(e.target.value)}
+                                                    className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                />
+                                                <select 
+                                                    value={newPagePlatform}
+                                                    onChange={e => setNewPagePlatform(e.target.value)}
+                                                    className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                >
+                                                    <option value="Facebook">Facebook</option>
+                                                    <option value="Instagram">Instagram</option>
+                                                    <option value="LinkedIn">LinkedIn</option>
+                                                    <option value="TikTok">TikTok</option>
+                                                    <option value="Other">Altro</option>
+                                                </select>
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Descrizione (opzionale)" 
+                                                    value={newPageDesc}
+                                                    onChange={e => setNewPageDesc(e.target.value)}
+                                                    className="w-full p-2 text-sm rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-gray-500">Colore:</span>
+                                                    <input 
+                                                        type="color" 
+                                                        value={newPageColor}
+                                                        onChange={e => setNewPageColor(e.target.value)}
+                                                        className="h-8 w-16 p-0 border-0 rounded cursor-pointer"
+                                                    />
+                                                </div>
+                                                <button 
+                                                    onClick={handleSavePage}
+                                                    className="w-full bg-purple-600 text-white py-1.5 rounded text-sm font-bold hover:bg-purple-700"
+                                                >
+                                                    {editingPage ? 'Aggiorna' : 'Crea Pagina'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                                        {verticalPages.length === 0 && !isPageManagerOpen && (
+                                            <p className="text-xs text-gray-400 italic text-center py-4">Nessuna pagina verticale. Aggiungine una per iniziare.</p>
+                                        )}
+                                        {verticalPages.map(page => (
+                                            <div key={page.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded border border-gray-100 dark:border-gray-700 group">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-8 rounded-full" style={{ backgroundColor: page.color }}></div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-200">{page.name}</p>
+                                                        <p className="text-[10px] text-gray-500">{page.platform}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => handleEditPage(page)} className="text-blue-500 hover:bg-blue-50 p-1 rounded">✏️</button>
+                                                    <button onClick={() => handleDeletePage(page.id)} className="text-red-500 hover:bg-red-50 p-1 rounded">🗑️</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* DATA ENTRY CARD */}
+                                <div className="bg-white dark:bg-gray-750 p-5 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+                                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+                                        📝 Inserimento Dati
+                                    </h3>
+                                    
+                                    <div className="mb-4">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Data Rilevazione</label>
+                                        <input 
+                                            type="date" 
+                                            value={verticalEntryDate} 
+                                            onChange={(e) => setVerticalEntryDate(e.target.value)}
+                                            className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                                        {verticalPages.map(page => (
+                                            <div key={page.id} className="flex items-center justify-between">
+                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[150px]" title={page.name}>
+                                                    {page.name}
+                                                </span>
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="0"
+                                                    value={verticalInputValues[page.id] || ''}
+                                                    onChange={(e) => handleVerticalInputChange(page.id, e.target.value)}
+                                                    className="w-24 p-1.5 text-right text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-purple-500"
+                                                />
+                                            </div>
+                                        ))}
+                                        {verticalPages.length === 0 && <p className="text-xs text-gray-400">Aggiungi prima delle pagine.</p>}
+                                    </div>
+
+                                    <div className="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+                                        <button 
+                                            onClick={handleSaveVerticalStat}
+                                            disabled={verticalPages.length === 0}
+                                            className="w-full bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Salva Rilevazione
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* RIGHT: ANALYTICS */}
+                            <div className="xl:col-span-3 space-y-6">
+                                <div className="bg-white dark:bg-gray-750 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                                    <h3 className="font-bold text-gray-800 dark:text-white mb-6 text-sm flex items-center gap-2">
+                                        <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
+                                        📈 Trend Totale Pagine Verticali
+                                    </h3>
+                                    <FollowersLineChart data={processedVerticalData} color="#9333ea" />
+                                </div>
+
+                                <div className="bg-white dark:bg-gray-750 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                                    <h3 className="font-bold text-gray-800 dark:text-white mb-4 text-sm">Storico Rilevazioni</h3>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead>
+                                                <tr className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                                                    <th className="p-3 font-bold text-gray-500">Data</th>
+                                                    {verticalPages.map(p => (
+                                                        <th key={p.id} className="p-3 font-bold text-gray-700 dark:text-gray-300 text-right whitespace-nowrap">
+                                                            <span className="inline-block w-2 h-2 rounded-full mr-1" style={{backgroundColor: p.color}}></span>
+                                                            {p.name}
+                                                        </th>
+                                                    ))}
+                                                    <th className="p-3 text-right">Azioni</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {verticalStats.slice(0, 20).map(stat => (
+                                                    <tr key={stat.id} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                        <td className="p-3 font-medium text-gray-600 dark:text-gray-400">{moment(stat.date).format('DD/MM/YYYY')}</td>
+                                                        {verticalPages.map(p => (
+                                                            <td key={p.id} className="p-3 text-right font-mono text-gray-800 dark:text-gray-200">
+                                                                {(stat.pages[p.id] || 0).toLocaleString()}
+                                                            </td>
+                                                        ))}
+                                                        <td className="p-3 text-right">
+                                                            <button onClick={() => handleDeleteVerticalStat(stat.id)} className="text-red-400 hover:text-red-600">×</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                {verticalStats.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={verticalPages.length + 2} className="p-4 text-center text-gray-400 italic">Nessun dato inserito.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        /* --- MAIN VIEW (EXISTING CONTENT) --- */
+                        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
                         
                         {/* LEFT COLUMN: DATA ENTRY */}
                         <div className="xl:col-span-1 space-y-6">
@@ -952,6 +1303,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ isOpen, onClose, channe
 
                         </div>
                     </div>
+                    )}
                 </div>
 
                 {/* PREVIEW MODAL OVERLAY */}
