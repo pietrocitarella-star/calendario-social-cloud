@@ -9,6 +9,16 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.14.0',
+        date: '11/03/2026',
+        changes: [
+            'Gestione Campagne Istituzionali: Nuova sezione dedicata per inserire, gestire, modificare e copiare le campagne di comunicazione istituzionale.',
+            'Obiettivi Annuali Campagne: Monitoraggio del numero di campagne prodotte per anno (es. obiettivo 13 campagne per il 2026).',
+            'Dettagli Campagna Personalizzabili: Titolo, date, descrizione, tipologia, canali utilizzati e note aggiuntive.',
+            'Esportazione PDF Campagne: Generazione di report in formato PDF per la rendicontazione delle campagne istituzionali.'
+        ]
+    },
+    {
         version: '2.13.0',
         date: '05/03/2026',
         changes: [

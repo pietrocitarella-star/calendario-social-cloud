@@ -175,7 +175,7 @@ const PostModal: React.FC<PostModalProps> = ({
   const renderMarkdown = (text: string) => {
       if (!text) return <span className="text-gray-400 italic">Nessun testo inserito. Clicca su "Scrivi" per iniziare.</span>;
       
-      let html = text
+      const html = text
         // Escape HTML tags to prevent XSS (basic)
         .replace(/</g, "&lt;").replace(/>/g, "&gt;")
         // Bold (**text**)

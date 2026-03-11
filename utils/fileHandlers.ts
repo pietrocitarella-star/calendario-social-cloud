@@ -136,6 +136,54 @@ export const exportPostsToPdf = (posts: Post[]) => {
     doc.save(`calendario-editoriale_${timestamp}.pdf`);
 };
 
+export const exportInstitutionalCampaignsToPdf = (campaigns: any[], year: number) => {
+    const doc = new jsPDF();
+    const timestamp = getFormattedDate();
+
+    // Titolo del documento
+    doc.setFontSize(18);
+    doc.text(`Campagne Istituzionali ${year}`, 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Generato il: ${moment().format('DD/MM/YYYY HH:mm')}`, 14, 30);
+    doc.text(`Totale Campagne: ${campaigns.length}`, 14, 36);
+
+    // Definizione colonne e dati
+    const tableColumn = ["Titolo", "Inizio", "Fine", "Tipo", "Canali", "Landing Page"];
+    const tableRows: any[] = [];
+
+    campaigns.forEach(campaign => {
+        const campaignData = [
+            campaign.title,
+            moment(campaign.startDate).format('DD/MM/YYYY'),
+            moment(campaign.endDate).format('DD/MM/YYYY'),
+            campaign.type || '-',
+            campaign.channels ? campaign.channels.join(', ') : '-',
+            campaign.landingPage || '-'
+        ];
+        tableRows.push(campaignData);
+    });
+
+    autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 45,
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [249, 115, 22] }, // Orange header to match campaign theme
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+            0: { cellWidth: 'auto' }, // Titolo
+            1: { cellWidth: 20 }, // Inizio
+            2: { cellWidth: 20 }, // Fine
+            3: { cellWidth: 25 }, // Tipo
+            4: { cellWidth: 35 }, // Canali
+            5: { cellWidth: 35 }  // Landing Page
+        }
+    });
+
+    doc.save(`campagne_istituzionali_${year}_${timestamp}.pdf`);
+};
+
 // --- CSV IMPORT LOGIC ---
 
 // Mappa estesa per la normalizzazione dei nomi dei canali
@@ -312,8 +360,8 @@ export const parseCsvToPosts = (csvContent: string, teamMembers: TeamMember[] = 
         const dateFormats = ['DD/MM/YYYY', 'YYYY-MM-DD', 'DD-MM-YYYY', 'D/M/YYYY', 'D-M-YYYY', 'D/M/YY', 'DD/MM/YY'];
         const dateTimeFormats = ['YYYY-MM-DDTHH:mm', 'DD/MM/YYYY HH:mm', 'YYYY-MM-DD HH:mm', 'DD-MM-YYYY HH:mm', 'YYYY-MM-DD HH:mm:ss'];
 
-        let dateString = postData.date ? normalizeDateString(postData.date) : '';
-        let timeString = postData.timeStr ? postData.timeStr.replace('.', ':') : '';
+        const dateString = postData.date ? normalizeDateString(postData.date) : '';
+        const timeString = postData.timeStr ? postData.timeStr.replace('.', ':') : '';
         let parsedDate: moment.Moment | null = null;
 
         if (dateString) {
@@ -437,7 +485,7 @@ export const parseFollowersCsv = (csvContent: string): FollowerStat[] => {
         const maxRequiredIdx = Math.max(channelIdx, countIdx);
         if (values.length <= maxRequiredIdx) continue;
 
-        let rawDate = values[dateIdx];
+        const rawDate = values[dateIdx];
         const rawChannel = values[channelIdx];
         const rawCount = values[countIdx];
 

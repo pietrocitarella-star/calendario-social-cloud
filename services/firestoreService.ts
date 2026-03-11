@@ -1,5 +1,5 @@
 
-import { Post, SocialChannel, PostVersion, TeamMember, PostStatus, PostType, FollowerStat, Campaign } from '../types';
+import { Post, SocialChannel, PostVersion, TeamMember, PostStatus, PostType, FollowerStat, Campaign, VerticalPage, VerticalStat, InstitutionalCampaign } from '../types';
 import { db } from '../firebaseConfig';
 import { 
     collection, 
@@ -23,6 +23,7 @@ const STATS_COLLECTION = 'follower_stats';
 const CAMPAIGNS_COLLECTION = 'campaigns';
 const VERTICAL_PAGES_COLLECTION = 'vertical_pages';
 const VERTICAL_STATS_COLLECTION = 'vertical_stats';
+const INSTITUTIONAL_CAMPAIGNS_COLLECTION = 'institutional_campaigns';
 
 // --- HELPERS ---
 
@@ -256,7 +257,7 @@ export const subscribeToChannels = (callback: (channels: SocialChannel[]) => voi
     const q = query(collection(db, CHANNELS_COLLECTION), orderBy('name'));
     
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-        let channels: SocialChannel[] = [];
+        const channels: SocialChannel[] = [];
         snapshot.forEach((doc) => {
             channels.push({ id: doc.id, ...(doc.data() as any) } as SocialChannel);
         });
@@ -306,7 +307,7 @@ export const subscribeToTeam = (callback: (members: TeamMember[]) => void) => {
     const q = query(collection(db, TEAM_COLLECTION), orderBy('name'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        let members: TeamMember[] = [];
+        const members: TeamMember[] = [];
         snapshot.forEach((doc) => {
             members.push({ id: doc.id, ...(doc.data() as any) } as TeamMember);
         });
@@ -537,6 +538,53 @@ export const deleteCampaign = async (id: string): Promise<void> => {
         await deleteDoc(doc(db, CAMPAIGNS_COLLECTION, id));
     } catch (e) {
         handleError('eliminazione campagna', e);
+        throw e;
+    }
+};
+
+export const subscribeToInstitutionalCampaigns = (callback: (campaigns: InstitutionalCampaign[]) => void) => {
+    const q = query(collection(db, INSTITUTIONAL_CAMPAIGNS_COLLECTION), orderBy('startDate', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const campaigns: InstitutionalCampaign[] = [];
+        snapshot.forEach((doc) => {
+            campaigns.push({ id: doc.id, ...(doc.data() as any) } as InstitutionalCampaign);
+        });
+        callback(campaigns);
+    }, (error) => {
+        console.error("Errore sottoscrizione campagne istituzionali:", error);
+    });
+
+    return unsubscribe;
+};
+
+export const addInstitutionalCampaign = async (campaign: Omit<InstitutionalCampaign, 'id'>): Promise<void> => {
+    try {
+        await addDoc(collection(db, INSTITUTIONAL_CAMPAIGNS_COLLECTION), {
+            ...campaign,
+            createdAt: new Date().toISOString()
+        });
+    } catch (e) {
+        handleError('creazione campagna istituzionale', e);
+        throw e;
+    }
+};
+
+export const updateInstitutionalCampaign = async (id: string, data: Partial<InstitutionalCampaign>): Promise<void> => {
+    try {
+        const docRef = doc(db, INSTITUTIONAL_CAMPAIGNS_COLLECTION, id);
+        await updateDoc(docRef, data);
+    } catch (e) {
+        handleError('aggiornamento campagna istituzionale', e);
+        throw e;
+    }
+};
+
+export const deleteInstitutionalCampaign = async (id: string): Promise<void> => {
+    try {
+        await deleteDoc(doc(db, INSTITUTIONAL_CAMPAIGNS_COLLECTION, id));
+    } catch (e) {
+        handleError('eliminazione campagna istituzionale', e);
         throw e;
     }
 };

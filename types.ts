@@ -105,3 +105,16 @@ export interface VerticalStat {
     date: string;
     pages: Record<string, number>; // pageId -> follower count
 }
+
+export interface InstitutionalCampaign {
+    id?: string;
+    title: string;
+    startDate: string;
+    endDate: string;
+    description: string;
+    type: string;
+    channels: string[];
+    landingPage?: string;
+    notes: string;
+    createdAt?: string;
+}

@@ -37,7 +37,8 @@ const TeamMembersModal = lazy(() => import('./components/TeamMembersModal'));
 const ChangelogModal = lazy(() => import('./components/ChangelogModal'));
 const DayDetailsModal = lazy(() => import('./components/DayDetailsModal'));
 const FollowersModal = lazy(() => import('./components/FollowersModal')); 
-const CampaignsManager = lazy(() => import('./components/CampaignsManager')); // NUOVO
+const CampaignsManager = lazy(() => import('./components/CampaignsManager')); // RIPRISTINATO
+const InstitutionalCampaignsModal = lazy(() => import('./components/InstitutionalCampaignsModal')); // NUOVO
 const KanbanBoard = lazy(() => import('./components/KanbanBoard')); // NUOVO
 
 moment.locale('it');
@@ -138,6 +139,7 @@ const App: React.FC = () => {
     const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
     const [isFollowersModalOpen, setIsFollowersModalOpen] = useState(false); 
     const [isCampaignsModalOpen, setIsCampaignsModalOpen] = useState(false); // NUOVO
+    const [isInstitutionalCampaignsModalOpen, setIsInstitutionalCampaignsModalOpen] = useState(false); // NUOVO
     
     const [dayModalData, setDayModalData] = useState<{ isOpen: boolean, date: Date | null, posts: Post[] }>({
         isOpen: false,
@@ -1055,6 +1057,7 @@ const App: React.FC = () => {
                         onShowChannels={() => setIsChannelsModalOpen(true)}
                         onShowTeam={() => setIsTeamModalOpen(true)}
                         onShowCampaigns={() => setIsCampaignsModalOpen(true)}
+                        onShowInstitutionalCampaigns={() => setIsInstitutionalCampaignsModalOpen(true)}
                         onExportJson={handleExportJson}
                         onExportCsv={handleExportCsv}
                         onImport={handleImportFileSelect}
@@ -1470,11 +1473,28 @@ const App: React.FC = () => {
                     </div>
                 )}
 
-                {/* MODALE CAMPAGNE */}
+                {/* MODALE CAMPAGNE EDITORIALI */}
                 {isCampaignsModalOpen && (
                     <CampaignsManager 
                         isOpen={isCampaignsModalOpen} 
                         onClose={() => setIsCampaignsModalOpen(false)} 
+                        channels={socialChannels}
+                        teamMembers={teamMembers}
+                        allPosts={globalSearchIndex}
+                        postsUpdateTrigger={postsUpdateTrigger}
+                        onEditPost={(post, campaignId) => {
+                            setSelectedEvent(post);
+                            setCampaignContext({ id: campaignId, hidden: post.hiddenFromCalendar ?? true });
+                            setIsPostModalOpen(true);
+                        }}
+                    />
+                )}
+
+                {/* MODALE CAMPAGNE ISTITUZIONALI */}
+                {isInstitutionalCampaignsModalOpen && (
+                    <InstitutionalCampaignsModal 
+                        isOpen={isInstitutionalCampaignsModalOpen} 
+                        onClose={() => setIsInstitutionalCampaignsModalOpen(false)} 
                         channels={socialChannels}
                         teamMembers={teamMembers}
                         allPosts={globalSearchIndex}
