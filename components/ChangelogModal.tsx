@@ -9,6 +9,15 @@ interface ChangeLogEntry {
 
 const changelogData: ChangeLogEntry[] = [
     {
+        version: '2.15.0',
+        date: '12/03/2026',
+        changes: [
+            'Reorganizzazione dell\'interfaccia: Spostati i pulsanti di visualizzazione (Calendario/Bacheca), gli strumenti di importazione/esportazione dati e il pulsante "Nuovo Post" nella riga dei filtri rapidi per ottimizzare lo spazio nella barra superiore.',
+            'Nuova visualizzazione Campagne: L\'elenco delle campagne è stato compattato in una lista a fisarmonica. Cliccando su una campagna è possibile espanderla per visualizzare i dettagli, gli obiettivi e le azioni rapide (Duplica, Elimina, Gestisci Post).',
+            'Legenda Stati compatta: La legenda degli stati è stata ridisegnata come una barra compatta a forma di pillola, risultando molto meno invadente e migliorando l\'usabilità generale.'
+        ]
+    },
+    {
         version: '2.14.0',
         date: '11/03/2026',
         changes: [

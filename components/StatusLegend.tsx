@@ -4,16 +4,14 @@ import { PostStatus } from '../types';
 
 const StatusLegend: React.FC = () => {
     return (
-        <div className="mb-4 p-3 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-            <h3 className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Legenda Stati:</h3>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                {POST_STATUSES.map(status => (
-                    <div key={status} className="flex items-center gap-2">
-                        <span className={`w-3 h-3 rounded-full ${STATUS_COLORS[status as PostStatus]}`}></span>
-                        <span className="text-xs capitalize text-gray-600 dark:text-gray-400">{status}</span>
-                    </div>
-                ))}
-            </div>
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 py-2 px-4 bg-white dark:bg-gray-800 rounded-xl md:rounded-full border border-gray-200 dark:border-gray-700 shadow-sm mx-auto w-fit mb-2">
+            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mr-1">Legenda:</span>
+            {POST_STATUSES.map(status => (
+                <div key={status} className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[status as PostStatus]}`}></span>
+                    <span className="text-[10px] uppercase tracking-wider text-gray-600 dark:text-gray-400 font-medium">{status}</span>
+                </div>
+            ))}
         </div>
     );
 };

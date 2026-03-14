@@ -45,6 +45,7 @@ const InstitutionalCampaignsModal: React.FC<Props> = ({
     const [customChannelsStr, setCustomChannelsStr] = useState('');
     const [landingPage, setLandingPage] = useState('');
     const [notes, setNotes] = useState('');
+    const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
 
     const availableChannels = useMemo(() => {
         const base = (channels || []).map(c => c.name);
@@ -355,53 +356,94 @@ const InstitutionalCampaignsModal: React.FC<Props> = ({
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {filteredCampaigns.map(c => (
-                                        <div key={c.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h4 className="font-bold text-lg text-gray-900 dark:text-white">{c.title}</h4>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => editCampaign(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded" title="Modifica">✏️</button>
-                                                    <button onClick={() => duplicateCampaign(c)} className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded" title="Duplica">📄</button>
-                                                    <button onClick={() => deleteCampaign(c.id!)} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Elimina">🗑️</button>
+                                    {filteredCampaigns.map(c => {
+                                        const isExpanded = expandedCampaignId === c.id;
+                                        return (
+                                            <div key={c.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden transition-all group">
+                                                {/* Compact Header */}
+                                                <div 
+                                                    onClick={() => setExpandedCampaignId(isExpanded ? null : c.id!)}
+                                                    className="p-4 flex flex-col md:flex-row md:items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors gap-2 md:gap-0"
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <h4 className="font-bold text-lg text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">{c.title}</h4>
+                                                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                            <span>{moment(c.startDate).format('DD/MM/YY')} - {moment(c.endDate).format('DD/MM/YY')}</span>
+                                                            {c.type && (
+                                                                <>
+                                                                    <span>•</span>
+                                                                    <span className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">{c.type}</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center justify-between md:justify-end gap-4">
+                                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                                            <button onClick={() => editCampaign(c)} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded" title="Modifica">✏️</button>
+                                                            <button onClick={() => duplicateCampaign(c)} className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded" title="Duplica">📄</button>
+                                                            <button onClick={() => deleteCampaign(c.id!)} className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded" title="Elimina">🗑️</button>
+                                                        </div>
+                                                        <div className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                                                            <svg className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            
-                                            <div className="flex flex-wrap gap-x-4 gap-y-2 mb-3 text-xs text-gray-600 dark:text-gray-400">
-                                                <div className="flex items-center gap-1">
-                                                    <span className="font-bold">Periodo:</span> 
-                                                    {moment(c.startDate).format('DD/MM/YY')} - {moment(c.endDate).format('DD/MM/YY')}
-                                                </div>
-                                                {c.type && (
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="font-bold">Tipo:</span> {c.type}
+
+                                                {/* Expanded Content */}
+                                                {isExpanded && (
+                                                    <div className="p-4 pt-0 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 animate-fadeIn">
+                                                        <div className="mt-4 space-y-4">
+                                                            {c.description && (
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Descrizione</p>
+                                                                    <p className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 whitespace-pre-wrap">{c.description}</p>
+                                                                </div>
+                                                            )}
+
+                                                            {c.notes && (
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Note Aggiuntive</p>
+                                                                    <p className="text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 whitespace-pre-wrap">{c.notes}</p>
+                                                                </div>
+                                                            )}
+
+                                                            {c.landingPage && (
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Landing Page</p>
+                                                                    <a href={c.landingPage} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1 bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-700 w-fit">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                                                        {c.landingPage}
+                                                                    </a>
+                                                                </div>
+                                                            )}
+
+                                                            {c.channels && c.channels.length > 0 && (
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-2">Canali Utilizzati</p>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {c.channels.map((ch, idx) => (
+                                                                            <span key={idx} className="px-2.5 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs rounded-full border border-gray-200 dark:border-gray-600 shadow-sm">
+                                                                                {ch}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            
+                                                            {!c.description && !c.notes && !c.landingPage && (!c.channels || c.channels.length === 0) && (
+                                                                <div className="text-sm text-gray-500 italic p-3">
+                                                                    Nessun dettaglio aggiuntivo inserito.
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
-
-                                            {c.description && (
-                                                <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 line-clamp-2">{c.description}</p>
-                                            )}
-
-                                            {c.landingPage && (
-                                                <div className="mb-3">
-                                                    <a href={c.landingPage} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-                                                        {c.landingPage}
-                                                    </a>
-                                                </div>
-                                            )}
-
-                                            {c.channels && c.channels.length > 0 && (
-                                                <div className="flex flex-wrap gap-1 mb-2">
-                                                    {c.channels.map((ch, idx) => (
-                                                        <span key={idx} className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-[10px] rounded-full border border-gray-200 dark:border-gray-600">
-                                                            {ch}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>

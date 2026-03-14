@@ -30,6 +30,7 @@ const CampaignsManager: React.FC<CampaignsManagerProps> = ({
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
     const [campaignPosts, setCampaignPosts] = useState<Post[]>([]);
+    const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
     
     // Form State per Nuova Campagna
     const [isCreating, setIsCreating] = useState(false);
@@ -47,17 +48,17 @@ const CampaignsManager: React.FC<CampaignsManagerProps> = ({
         return () => unsubscribe();
     }, [isOpen]);
 
+    const loadCampaignPosts = async (campaignId: string) => {
+        const posts = await fetchPostsByCampaign(campaignId); 
+        setCampaignPosts(posts.sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf()));
+    };
+
     // Carica i post quando si seleziona una campagna O quando cambia il trigger esterno (post salvato)
     useEffect(() => {
         if (selectedCampaign && viewMode === 'DETAILS') {
             loadCampaignPosts(selectedCampaign.id);
         }
     }, [selectedCampaign, viewMode, postsUpdateTrigger]);
-
-    const loadCampaignPosts = async (campaignId: string) => {
-        const posts = await fetchPostsByCampaign(campaignId); 
-        setCampaignPosts(posts.sort((a, b) => moment(a.date).valueOf() - moment(b.date).valueOf()));
-    };
 
     const handleCreateCampaign = async () => {
         if (!newCampaign.name || !newCampaign.startDate || !newCampaign.endDate) {
@@ -297,60 +298,114 @@ const CampaignsManager: React.FC<CampaignsManagerProps> = ({
                     {/* VIEW: LISTA CAMPAGNE */}
                     {viewMode === 'LIST' && (
                         <div className="h-full overflow-y-auto p-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div className="flex flex-col gap-4">
                                 {/* Create New Card */}
-                                <div className="bg-white dark:bg-gray-750 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 flex flex-col justify-center items-center text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-all min-h-[200px]" onClick={() => setIsCreating(true)}>
-                                    <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-3">
-                                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                <div className="bg-white dark:bg-gray-750 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-4 flex justify-between items-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 transition-all" onClick={() => setIsCreating(true)}>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-gray-700 dark:text-gray-200">Nuova Campagna</h3>
+                                            <p className="text-sm text-gray-500">Crea un nuovo piano editoriale</p>
+                                        </div>
                                     </div>
-                                    <h3 className="font-bold text-gray-700 dark:text-gray-200">Nuova Campagna</h3>
-                                    <p className="text-sm text-gray-500 mt-1">Crea un nuovo piano editoriale</p>
                                 </div>
 
-                                {/* Campaign Cards */}
+                                {/* Campaign Rows */}
                                 {campaigns.map(campaign => {
                                     const postCount = getPostCountForCampaign(campaign.id);
+                                    const isExpanded = expandedCampaignId === campaign.id;
+                                    
                                     return (
                                         <div 
                                             key={campaign.id} 
-                                            onClick={() => handleOpenCampaign(campaign)}
-                                            className="bg-white dark:bg-gray-750 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 cursor-pointer hover:shadow-md hover:-translate-y-1 transition-all group relative overflow-hidden"
+                                            className="bg-white dark:bg-gray-750 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden transition-all group"
                                         >
-                                            <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: campaign.color }}></div>
-                                            
-                                            <div className="flex justify-between items-start mb-4">
-                                                <h3 className="font-bold text-lg text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">{campaign.name}</h3>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={(e) => handleDuplicateCampaign(campaign, e)} className="text-gray-400 hover:text-blue-500 p-1" title="Duplica Campagna">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
-                                                    </button>
-                                                    <button onClick={(e) => handleDeleteCampaign(campaign.id, e)} className="text-gray-400 hover:text-red-500 p-1" title="Elimina Campagna">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                                    </button>
+                                            {/* Compact Header */}
+                                            <div 
+                                                onClick={() => setExpandedCampaignId(isExpanded ? null : campaign.id)}
+                                                className="p-4 flex flex-col md:flex-row md:items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors relative gap-4 md:gap-0"
+                                            >
+                                                <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: campaign.color }}></div>
+                                                
+                                                <div className="flex items-center gap-4 pl-3">
+                                                    <h3 className="font-bold text-lg text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">{campaign.name}</h3>
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400 hidden md:flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                        {moment(campaign.startDate).format('DD MMM')} - {moment(campaign.endDate).format('DD MMM YYYY')}
+                                                    </span>
+                                                </div>
+                                                
+                                                <div className="flex items-center justify-between md:justify-end gap-4 pl-3 md:pl-0 w-full md:w-auto">
+                                                    <span className="text-xs text-gray-500 dark:text-gray-400 md:hidden flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                                        {moment(campaign.startDate).format('DD MMM')} - {moment(campaign.endDate).format('DD MMM YYYY')}
+                                                    </span>
+                                                    
+                                                    <div className="flex items-center gap-4">
+                                                        <span className="text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2.5 py-1 rounded-full border border-blue-100 dark:border-blue-800">
+                                                            {postCount} Post
+                                                        </span>
+                                                        <div className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                                                            <svg className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            
-                                            <div className="space-y-2 mb-4">
-                                                <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                                    {moment(campaign.startDate).format('DD MMM')} - {moment(campaign.endDate).format('DD MMM YYYY')}
-                                                </p>
-                                                {campaign.objective && (
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2 line-clamp-1">
-                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                                        {campaign.objective}
-                                                    </p>
-                                                )}
-                                            </div>
-                                            
-                                            <div className="pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                                                <span className="text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">
-                                                    {postCount} Post
-                                                </span>
-                                                <span className="text-blue-600 text-sm font-medium flex items-center gap-1 group-hover:underline">
-                                                    Apri Piano <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-                                                </span>
-                                            </div>
+
+                                            {/* Expanded Content */}
+                                            {isExpanded && (
+                                                <div className="p-5 pt-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 animate-fadeIn">
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                        <div className="md:col-span-2 space-y-4">
+                                                            {campaign.objective && (
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Obiettivo Principale</p>
+                                                                    <p className="text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                                                        {campaign.objective}
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                            {campaign.description && (
+                                                                <div>
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Descrizione / Note</p>
+                                                                    <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                                                        {campaign.description}
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                            {!campaign.objective && !campaign.description && (
+                                                                <div className="text-sm text-gray-500 italic p-3">
+                                                                    Nessun dettaglio aggiuntivo inserito per questa campagna.
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        <div className="flex flex-col justify-end gap-3 md:items-end">
+                                                            <div className="flex gap-2 w-full md:w-auto">
+                                                                <button onClick={(e) => handleDuplicateCampaign(campaign, e)} className="flex-1 md:flex-none px-4 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
+                                                                    Duplica
+                                                                </button>
+                                                                <button onClick={(e) => handleDeleteCampaign(campaign.id, e)} className="flex-1 md:flex-none px-4 py-2 text-sm bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                                    Elimina
+                                                                </button>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => handleOpenCampaign(campaign)}
+                                                                className="w-full md:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+                                                            >
+                                                                Gestisci Post
+                                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
